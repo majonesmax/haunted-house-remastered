@@ -1,6 +1,7 @@
-"""G's hints (game/hints.py): every line fits the screen and the font, in every game, and they point the
-right way - checked in the running game, with the pieces put in known places (each new game hides them
-somewhere different, so the test places them itself, as the research lab does).
+"""G's hints (game/hints.py): they fit the screen and the font in every game, point the right way, say the
+same again until something changes, and send you out of the front door with the whole urn - checked in
+the running game, with the pieces put in known places (each new game hides them somewhere different, so
+the test places them itself, as the research lab does).
 
 Usage: python tests/test_hints.py        (exit code 1 if a check fails)
 """
@@ -20,7 +21,18 @@ from game.state import Game  # noqa: E402
 from shared.hud import GLYPHS  # noqa: E402
 
 SCREEN_CHARACTERS = 30
-LEVELS = 6               # more than there are steps, so every step and the wrap round are seen
+URN_PIECES = (2, 3, 4)
+SOMEWHERE_ELSE = [(2, 0), (3, 4)]     # the other two pieces, out of the way (floor, room)
+WAYS = [   # (what it should say, piece 1's (floor, room), the lines) - you start on floor 0, room 2
+    ("a piece in the bottom-left room: down and to the left", (0, 1),
+     ["3 PIECES LEFT. THE NEAREST IS", "DOWN AND TO THE LEFT."]),
+    ("a piece in the room on the left: to the left", (0, 3),
+     ["3 PIECES LEFT. THE NEAREST IS", "TO THE LEFT."]),
+    ("a piece in this room: how to take it", (0, 2),
+     ["A PIECE IS IN THIS ROOM.", "LIGHT A MATCH - SPACE - AND", "WALK INTO IT."]),
+    ("the nearest piece two floors up: up the stairs", (2, 1),
+     ["3 PIECES LEFT. THE NEAREST IS", "UP THE STAIRS, 2 FLOORS."]),
+]
 failures = []
 
 
@@ -38,44 +50,67 @@ def start_game(lab, number):
     lab.run(30)
 
 
-def all_lines(state, rom):
-    return [line for level in range(LEVELS) for line in hints.hint(state, rom, level)]
-
-
-def main():
-    lab, game = Lab(), Game()
-    for number in range(1, 10):
-        start_game(lab, number)
-        lines = all_lines(game.state(lab.ram), game.rom)
-        too_long = [line for line in lines if len(line) > SCREEN_CHARACTERS]
-        unknown = sorted({letter for line in lines for letter in line if letter not in GLYPHS})
-        check(f"game {number}: every line fits on screen", not too_long, ", ".join(too_long))
-        check(f"game {number}: every letter is in the font", not unknown, "".join(unknown))
-    start_game(lab, 1)
-    for claim, places, expected in WAYS:
-        for piece, (floor, room) in zip(URN_PIECES, places):
-            put(lab, game.rom, piece, floor, room)
-        way = hints.hint(game.state(lab.ram), game.rom, 1)
-        check(claim, way == ["THE NEAREST PIECE IS", expected], " / ".join(way))
-    return 1 if failures else 0
-
-
-URN_PIECES = (2, 3, 4)
-WAYS = [   # (what it should say, each piece's (floor, room), the way) - you start on floor 0, room 2
-    ("a piece in the bottom-left room: down and to the left", [(0, 1), (2, 0), (3, 4)],
-     "DOWN AND TO THE LEFT."),
-    ("a piece in the room on the left: to the left", [(0, 3), (2, 0), (3, 4)], "TO THE LEFT."),
-    ("a piece in this room", [(0, 2), (2, 0), (3, 4)], "IN THIS ROOM - LIGHT A MATCH."),
-    ("all pieces two floors up: up the stairs", [(2, 1), (2, 0), (3, 4)], "UP THE STAIRS, 2 FLOORS."),
-]
-
-
 def put(lab, rom, item, floor, room):
     """An item in the middle of a room (test setup: the lab writes RAM; the game never does)."""
     x, y = R.room_centre(rom, room)
     lab.poke(M.ITEM_FLOOR + item, floor)
     lab.poke(M.ITEM_X + item, x)
     lab.poke(M.ITEM_Y + item, y)
+
+
+def hold_whole_urn(lab):
+    lab.poke(M.CARRIED, 2)
+    for offset, shape in enumerate((8, 0xFF, 0xFF)):
+        lab.poke(M.URN_SHAPES + offset, shape)
+
+
+def fits(lines):
+    too_long = [line for line in lines if len(line) > SCREEN_CHARACTERS]
+    unknown = sorted({letter for line in lines for letter in line if letter not in GLYPHS})
+    return too_long + unknown
+
+
+def check_every_game(lab, game):
+    for number in range(1, 10):
+        start_game(lab, number)
+        problems = fits(hints.hint(game.state(lab.ram), game.rom))
+        check(f"game {number}: the hint fits the screen and the font", not problems, ", ".join(problems))
+    problems = fits(hints.WHOLE_URN_NOTE)
+    check("the whole-urn note fits the screen and the font", not problems, ", ".join(problems))
+
+
+def check_ways(lab, game):
+    start_game(lab, 1)
+    for claim, first, expected in WAYS:
+        for piece, (floor, room) in zip(URN_PIECES, [first] + SOMEWHERE_ELSE):
+            put(lab, game.rom, piece, floor, room)
+        said = hints.hint(game.state(lab.ram), game.rom)
+        check(claim, said == expected, " / ".join(said))
+        again = hints.hint(game.state(lab.ram), game.rom)
+        check(f"{claim} - and the same again", again == said)
+
+
+def check_get_out(lab, game):
+    start_game(lab, 1)
+    before = game.state(lab.ram)
+    hold_whole_urn(lab)
+    after = game.state(lab.ram)
+    check("the note comes when the urn becomes whole", hints.urn_just_whole(before, after))
+    said = hints.hint(after, game.rom)
+    check("whole urn, in the front door's room: out of its right-hand edge",
+          said[0] == "YOU HAVE THE URN! GET OUT NOW!" and "RIGHT-HAND EDGE." in said, " / ".join(said))
+    lab.poke(M.FLOOR, 2)
+    said = hints.hint(game.state(lab.ram), game.rom)
+    down = said[-1] == "DOWN THE STAIRS, 2 FLOORS."
+    check("whole urn, two floors up: down the stairs", down, " / ".join(said))
+
+
+def main():
+    lab, game = Lab(), Game()
+    check_every_game(lab, game)
+    check_ways(lab, game)
+    check_get_out(lab, game)
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":

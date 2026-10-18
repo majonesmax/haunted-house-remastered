@@ -57,7 +57,6 @@ FIT = 0.9                       # a view bigger than this much of the screen ope
 KEEP_WINDOW_IN_FULLSCREEN = sys.platform == "darwin"   # Windows needed a new window for each view
 NOTE_FRAMES = 120               # how long a message stays on screen
 HINT_FRAMES = 360               # ...and a hint, which takes longer to read
-HINT_FORGETS = 15 * 60          # frames after which the next G starts the hints from the goal again
 NOTE_Y = 182                    # where it goes: the bottom of the view
 NOTE_LINE = 11                  # pixels from one line of a message to the next
 WHITE, GREY, RED, AMBER = (236, 238, 236), (152, 150, 152), (230, 40, 40), (240, 180, 60)
@@ -83,7 +82,6 @@ class GameWindow:
         self.audio.tap = self.recorder.audio_tap
         self.panel = RamPanel()
         self.note, self.note_frames = [], 0   # a moment's message on screen: its lines ("SOUND: ORIGINAL")
-        self.hint_level, self.last_hint = 0, None   # G: how many hints in a row, and the frame of the last
         self.lights_on = False    # O: the cheat - the whole floor lit, everything on it shown
         self.view = "both"
         self.paused = self.fullscreen = False
@@ -138,8 +136,11 @@ class GameWindow:
     def play_frame(self):
         """One frame of the game: run it, hear it, draw it (each look that's needed), record it."""
         self.step_game()
+        before = self.state
         state = self.state = self.game.state(self.core.ram)
         state.lights_on = self.lights_on
+        if before is not None and hints.urn_just_whole(before, state):
+            self.show_note(hints.WHOLE_URN_NOTE, HINT_FRAMES)   # it isn't won until it's out of the door
         flash, thunder = self.weather(state)
         extras = Extras(self.intro, flash)
         self.sound.follow(state, self.intro, thunder)
@@ -325,13 +326,9 @@ class GameWindow:
         self.show_note(on if self.lights_on else "LIGHTS OFF")
 
     def give_hint(self):
-        """G: the goal, then the way, then tips - one more each press (game/hints.py)."""
-        if self.state is None:
-            return
-        recent = self.last_hint is not None and self.frame_no - self.last_hint < HINT_FORGETS
-        self.hint_level = self.hint_level + 1 if recent else 0
-        self.last_hint = self.frame_no
-        self.show_note(hints.hint(self.state, self.game.rom, self.hint_level), HINT_FRAMES)
+        """G: what you need next, and which way (game/hints.py) - the same until something changes."""
+        if self.state is not None:
+            self.show_note(hints.hint(self.state, self.game.rom), HINT_FRAMES)
 
     def toggle_help(self):
         """H: the keys, then how to play, then neither."""

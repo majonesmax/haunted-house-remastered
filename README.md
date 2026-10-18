@@ -70,7 +70,9 @@ python play.py                         # drop your ROM onto the window the first
 More: `python play.py --look snes`, `--grid`, `--pack <name>`, `--help`. Recording (R) needs
 [ffmpeg](https://ffmpeg.org). On Linux, sound needs your distribution's PortAudio (e.g. `libportaudio2`).
 
-Stuck? **G** gives a hint - the goal, then which way to go - without marking anything on screen.
+Stuck? **G** gives a hint - which way to the nearest piece, or to the front door once the urn is whole -
+without marking anything on screen. When the urn comes together, the game reminds you it isn't won until
+it's out of the door.
 
 New to the game? Press **H** twice in the game: what you're trying to do, and the rules the original never
 explains. Each game number's rules show on the title screen.
@@ -120,7 +122,7 @@ In the game, **H** shows all of these.
 | D | the left difficulty switch: lightning on (the default) or off |
 | R | record (videos of each look and the 2600, the sound, the RAM, a log) |
 | S / P / F | screenshot / pause / fullscreen |
-| G | a hint: the goal, then which way to go, then a tip - press again for more |
+| G | a hint: which way to the nearest piece of the urn - or, once it's whole, to the front door |
 | O | lights on: the whole floor lit and everything on it shown - a cheat, for when you just want to see |
 | H | the keys, then how to play |
 | Esc | quit |

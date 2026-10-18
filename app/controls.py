@@ -17,7 +17,7 @@ CONTROLS = [
     ("S", "SCREENSHOT"),
     ("R", "RECORD"),
     ("F", "FULLSCREEN"),
-    ("G", "A HINT (AGAIN: MORE)"),
+    ("G", "A HINT: WHICH WAY NOW"),
     ("O", "LIGHTS ON (A CHEAT)"),
     ("H", "HELP, HOW TO PLAY"),
     ("ESC", "QUIT"),

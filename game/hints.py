@@ -1,7 +1,9 @@
-"""G: a hint, when you ask for one - the goal, then which way to go, then a tip. Each press says a little
-more; none of it changes the game, and nothing is ever marked on screen (the original never shows where
-anything is - the hint only points). Read from the same RAM as everything else, so it's right in the later
-games too, where the house hides things in different places.
+"""G: a hint, when you ask for one - it points you at what you need next, and says the same thing again until
+something changes: the nearest piece of the urn (up or down the stairs, or which way across the floor),
+how to take it once you're in its room, and - with the whole urn in hand - to get out of the front door,
+and which way. Nothing is marked on screen and the game is unchanged (the original never shows where
+anything is - the hint only points). Read from the same RAM as everything else, so it's right in every
+game, wherever the house has hidden things this time.
 
 Lines are at most 30 characters, a screen's width in the looks' 8 px font, which has no brackets
 (shared/hud.py: GLYPHS has letters, digits and  !',-./:<>?).
@@ -11,68 +13,77 @@ from game import rom as R
 from game.state import WHOLE_URN
 
 URN_PIECES = (2, 3, 4)          # item numbers
-KEY, SCEPTER = 0, 1
-FEARLESS_GHOST_FROM = 8         # from game 8 the ghost isn't kept off by the scepter (game/guide.py)
-LOCKS_FROM = 3                  # games 3-9 have locked doors
+PIECES_IN = {2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 2, 8: 3}   # an urn shape -> how many pieces it is
+JOINED = 0xFF                   # a piece joined into another: it isn't anywhere by itself
 OTHER_FLOOR = 1000              # how far another floor counts, against distances across one (up to ~400)
+FRONT_DOOR_FLOOR = 0
+WHOLE_URN_NOTE = ["THE URN IS WHOLE!", "NOW GET IT OUT OF THE", "FRONT DOOR - FLOOR 1, RIGHT."]
 
 
-def hint(state, rom, level):
-    """The lines for the `level`-th press (0, 1, 2...: the goal, the way, then tips in turn)."""
+def hint(state, rom):
+    """The lines for G, for this moment."""
     if state.mode != "playing":
         return ["PRESS ENTER TO START.", "TAB CHOOSES THE GAME (1-9)."]
-    steps = [goal(state), way(state, rom), *tips(state)]
-    return steps[level % len(steps)]
-
-
-def target(state):
-    """What you're after now: the front door if you hold the whole urn, else the nearest piece -
-    (floor, x, y), or None."""
     if holding_whole_urn(state):
-        return None
-    pieces = [item for item in state.items
-              if item.number in URN_PIECES and item.shape != 0xFF and item.number != state.carried]
-    if not pieces:
-        return None
-    def distance(item):   # another floor is always further than anywhere on this one
-        across = abs(item.x - state.player[0]) + abs(item.y - state.player[1])
-        return abs(item.floor - state.floor) * OTHER_FLOOR + across
-    nearest = min(pieces, key=distance)
-    return nearest.floor, nearest.x, nearest.y
+        return get_out(state)
+    aim = nearest_urn(state)
+    if aim is None:
+        return ["NOTHING LEFT TO FIND."]
+    floor, room = aim.floor, room_at(rom, aim.x, aim.y)
+    if floor == state.floor and room == state.room:
+        return take_it(state, aim)
+    return [left_to_find(state), way(state, floor, room)]
 
 
 def holding_whole_urn(state):
     return state.carried is not None and state.items[state.carried].shape == WHOLE_URN
 
 
-def goal(state):
-    if holding_whole_urn(state):
-        return ["YOU HAVE THE WHOLE URN!", "TAKE IT OUT OF THE FRONT", "DOOR: FLOOR 1, ON THE RIGHT."]
-    here = sum(1 for item in state.items if item.number in URN_PIECES and item.shape != 0xFF
-               and item.floor == state.floor and item.number != state.carried)
-    lines = ["FIND THE 3 PIECES OF THE URN."]
+def get_out(state):
+    """With the whole urn: out of the front door, and which way."""
+    lines = ["YOU HAVE THE URN! GET OUT NOW!"]
+    if state.floor == FRONT_DOOR_FLOOR and state.room == R.FRONT_DOOR_ROOM:
+        return lines + ["WALK OUT OF THIS ROOM'S", "RIGHT-HAND EDGE."]
+    return lines + ["THE FRONT DOOR IS", way(state, FRONT_DOOR_FLOOR, R.FRONT_DOOR_ROOM)]
+
+
+def take_it(state, aim):
+    what = "THE URN IS" if aim.shape == WHOLE_URN else "A PIECE IS"
+    if state.match_lit:
+        return [f"{what} IN THIS ROOM.", "WALK INTO IT WHILE THE", "MATCH BURNS."]
+    return [f"{what} IN THIS ROOM.", "LIGHT A MATCH - SPACE - AND", "WALK INTO IT."]
+
+
+def nearest_urn(state):
+    """The nearest piece, pieces or whole urn that isn't in your hands - an Item, or None."""
+    lying = [item for item in state.items
+             if item.number in URN_PIECES and item.shape != JOINED and item.number != state.carried]
+    if not lying:
+        return None
+    def distance(item):   # another floor is always further than anywhere on this one
+        across = abs(item.x - state.player[0]) + abs(item.y - state.player[1])
+        return abs(item.floor - state.floor) * OTHER_FLOOR + across
+    return min(lying, key=distance)
+
+
+def left_to_find(state):
+    """'3 PIECES LEFT. THE NEAREST IS' - counting what's in your hands as found."""
+    in_hand = 0
     if state.carried in URN_PIECES:
-        lines.append("WALK INTO A PIECE TO JOIN IT.")
-    on_this_floor = {0: "NONE ARE ON THIS FLOOR.", 1: "ONE IS ON THIS FLOOR."}
-    lines.append(on_this_floor.get(here, f"{here} ARE ON THIS FLOOR."))
-    return lines
+        in_hand = PIECES_IN.get(state.items[state.carried].shape, 0)
+    left = len(URN_PIECES) - in_hand
+    if left == 1:
+        return "1 PIECE LEFT. IT IS"
+    return f"{left} PIECES LEFT. THE NEAREST IS"
 
 
-def way(state, rom):
-    """Which way to the target: up or down the stairs, else across the floor - never which room exactly."""
-    if holding_whole_urn(state):
-        floor, room = 0, R.FRONT_DOOR_ROOM
-    else:
-        aim = target(state)
-        if aim is None:
-            return ["NOTHING LEFT TO FIND."]
-        floor, room = aim[0], room_at(rom, aim[1], aim[2])
-    what = "THE FRONT DOOR IS" if holding_whole_urn(state) else "THE NEAREST PIECE IS"
+def way(state, floor, room):
+    """Which way: up or down the stairs, else across the floor - never which room exactly."""
     if floor != state.floor:
         climbs = abs(floor - state.floor)
         direction = "UP" if floor > state.floor else "DOWN"
-        return [what, f"{direction} THE STAIRS, {climbs} FLOOR{'S' if climbs > 1 else ''}."]
-    return [what, across(state.room, room)]
+        return f"{direction} THE STAIRS, {climbs} FLOOR{'S' if climbs > 1 else ''}."
+    return across(state.room, room)
 
 
 def room_at(rom, x, y):
@@ -84,28 +95,15 @@ def room_at(rom, x, y):
 
 
 def across(from_room, to_room):
-    """'IN THIS ROOM.', or the way: up/down a row, left/right a column (rooms: even on the right, 0-1 at
-    the bottom)."""
-    if from_room == to_room:
-        return "IN THIS ROOM - LIGHT A MATCH."
+    """The way across a floor: up/down a row, left/right a column (rooms: even on the right, 0-1 at the
+    bottom)."""
     rows = to_room // 2 - from_room // 2
     columns = (from_room % 2) - (to_room % 2)      # from the left column (odd) to the right (even): +1
     vertical = "UP" if rows > 0 else "DOWN" if rows < 0 else ""
     sideways = "TO THE RIGHT" if columns > 0 else "TO THE LEFT" if columns < 0 else ""
-    both = " AND ".join(part for part in (vertical, sideways) if part)
-    return f"{both}."
+    return " AND ".join(part for part in (vertical, sideways) if part) + "."
 
 
-def tips(state):
-    """Practical help, the most useful first."""
-    found = [["TO PICK SOMETHING UP, LIGHT", "A MATCH AND WALK INTO IT."]]
-    if state.game >= LOCKS_FROM and state.carried != KEY:
-        found.append(["LOCKED DOORS OPEN FOR THE", f"MASTER KEY - ON FLOOR {state.items[KEY].floor + 1}."])
-    if state.carried != SCEPTER:
-        scepter = ["THE SCEPTER KEEPS MONSTERS", f"OFF YOU - IT'S ON FLOOR {state.items[SCEPTER].floor + 1}."]
-        if state.game >= FEARLESS_GHOST_FROM:
-            scepter.append("BUT NOT THIS GAME'S GHOST.")
-        found.append(scepter)
-    found.append(["THINGS ONLY SHOW CLOSE TO", "A LIT MATCH: SPACE LIGHTS ONE.",
-                  "YOU CAN HOLD ONE AT A TIME."])
-    return found
+def urn_just_whole(before, after):
+    """Did the urn become whole in your hands between these two states? (For the note that says so.)"""
+    return holding_whole_urn(after) and not holding_whole_urn(before)
