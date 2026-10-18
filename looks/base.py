@@ -37,6 +37,8 @@ FLICKER = 0.06                # the match's light grows and shrinks by up to thi
 FLICKER_EVERY = 4             # ...changing every this many frames
 FLICKER_STEPS = (0.0, 0.7, -0.4, 1.0, -0.9, 0.3, -0.2, 0.8)  # a fixed wobble, so pictures repeat
 BLINK_EVERY, BLINK_FRAMES = 200, 6   # the eyes blink for 6 frames in every 200
+HAND_OFFSET = 10              # floor units from the eyes to the hand holding a lit match (left or right)
+HAND_DROP = 2                 # ...and how far below them
 DIM = 0.45                    # brightness of what's seen but not lit (looks may do it their own way)
 
 
@@ -63,6 +65,7 @@ class FloorLook(Look):
         self.scenes = {}       # floor -> its pictures, built once (looks/scenery.py)
         self.adapted = {}      # (name, frame) -> a cast picture through adapt()
         self.facing = Facing()
+        self.hand_side = 1     # which side the match is held: +1 right, -1 left (the way you last went)
         self.checker = np.add.outer(np.arange(VIEW_H), np.arange(VIEW_W)) % 2 == 0
 
     def draw(self, state, frame_no):
@@ -127,8 +130,23 @@ class FloorLook(Look):
             if V.monster_visible(state, monster):
                 facing = self.facing.of(monster)
                 found.append((monster_name(monster), facing, monster.x, monster.y, HEIGHTS["monster"]))
-        found.append((self.eyes_name(state, frame_no), None, *state.player, HEIGHTS["eyes"]))
+        found += self.you(state, frame_no)
         return found
+
+    def you(self, state, frame_no):
+        """The eyes - and by matchlight, a hood around them and a hand holding up the match (if the cast
+        draws them). The eyes are where the game has the player; the hood and hand stay close, so they
+        never seem to touch what the eyes don't."""
+        x, y = state.player
+        eyes = (self.eyes_name(state, frame_no), None, x, y, HEIGHTS["eyes"])
+        if not state.match_lit:
+            return [eyes]
+        if state.looking[0]:
+            self.hand_side = 1 if state.looking[0] > 0 else -1
+        hand_side = "right" if self.hand_side > 0 else "left"
+        hand_x = x + self.hand_side * HAND_OFFSET
+        return [("hood", None, x, y, HEIGHTS["eyes"]), eyes,
+                ("match_hand", hand_side, hand_x, y - HAND_DROP, HEIGHTS["eyes"])]
 
     def eyes_name(self, state, frame_no):
         """The eyes look the way the joystick pushes, and now and then blink (if the cast draws a blink)."""
