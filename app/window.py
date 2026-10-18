@@ -19,6 +19,7 @@ from PIL import Image
 import looks
 from app.controls import CONTROLS
 from music import chiptune
+from music.board import SoundBoard
 from music.player import MusicPlayer
 from game import emulator as E
 from game import paths
@@ -29,7 +30,8 @@ from shared import hud
 JOYSTICK = {pygame.K_UP: E.JOY_UP, pygame.K_DOWN: E.JOY_DOWN, pygame.K_LEFT: E.JOY_LEFT,
             pygame.K_RIGHT: E.JOY_RIGHT, pygame.K_SPACE: E.JOY_B,
             pygame.K_TAB: E.JOY_SELECT, pygame.K_RETURN: E.JOY_START}
-KEYS = {pygame.K_d: "toggle_lightning", pygame.K_m: "toggle_music", pygame.K_v: "next_view",
+KEYS = {pygame.K_d: "toggle_lightning", pygame.K_m: "toggle_music", pygame.K_e: "toggle_effects",
+        pygame.K_v: "next_view",
         pygame.K_p: "toggle_pause", pygame.K_s: "screenshot", pygame.K_f: "toggle_fullscreen",
         pygame.K_h: "toggle_help"}
 LEFT_DIFFICULTY_A, LEFT_DIFFICULTY_B = 10, 12  # the Stella core's buttons for the left switch (docs)
@@ -38,6 +40,8 @@ VIEWS = ("both", "remaster", "2600")
 ORIGINAL_W = 320                               # the 2600's 160 x 228 picture, shown at the TV's shape
 GAP = 8
 FPS = 60
+NOTE_FRAMES = 120               # how long a message stays on screen
+NOTE_Y = 182                    # where it goes: the bottom of the view
 WHITE, GREY = (236, 238, 236), (152, 150, 152)
 
 
@@ -49,7 +53,9 @@ class GameWindow:
         self.core = E.Core()
         self.core.load(rom_path)
         self.music = MusicPlayer(chiptune.load_songs(self.look.pack.folder))
-        self.audio = E.AudioOut(int(self.core.av_info().timing.sample_rate), mixer=self.music.mixer)
+        self.sound = SoundBoard(self.music)
+        self.audio = E.AudioOut(int(self.core.av_info().timing.sample_rate), mixer=self.sound.mixer)
+        self.note, self.note_frames = "", 0   # a moment's message on screen ("SOUND: ORIGINAL")
         self.view = "both"
         self.paused = self.help = self.fullscreen = False
         self.lightning = True          # the left difficulty switch at B, the console's default
@@ -65,10 +71,11 @@ class GameWindow:
             if not self.paused:
                 self.step_game()
                 state = self.game.state(self.core.ram)
-                self.music.follow(state)
+                self.sound.follow(state)
                 self.picture = self.look.draw(state, self.frame_no)
                 self.frame_no += 1
             self.show()
+            self.note_frames = max(0, self.note_frames - 1)
             clock.tick(FPS)
         pygame.quit()
 
@@ -108,6 +115,8 @@ class GameWindow:
             canvas = np.concatenate([self.picture, gap, original], axis=1)
         if self.help:
             draw_help(canvas)
+        if self.note_frames:
+            draw_note(canvas, self.note)
         return canvas
 
     def original(self):
@@ -145,6 +154,7 @@ class GameWindow:
         """The left difficulty switch: B lets lightning flash (the default), A stops it."""
         self.lightning = not self.lightning
         self.switch_held = SWITCH_FRAMES
+        self.show_note("LIGHTNING: " + ("ON (B)" if self.lightning else "OFF (A)"))
 
     def next_view(self):
         self.view = VIEWS[(VIEWS.index(self.view) + 1) % len(VIEWS)]
@@ -156,7 +166,14 @@ class GameWindow:
         self.music.paused = self.paused
 
     def toggle_music(self):
-        self.music.toggle()
+        self.show_note("MUSIC: " + ("ON" if self.music.toggle() else "OFF"))
+
+    def toggle_effects(self):
+        remastered = self.sound.toggle_effects()
+        self.show_note("SOUND: " + ("REMASTERED" if remastered else "ORIGINAL 2600"))
+
+    def show_note(self, text):
+        self.note, self.note_frames = text, NOTE_FRAMES
 
     def toggle_help(self):
         self.help = not self.help
@@ -169,6 +186,13 @@ class GameWindow:
         os.makedirs(paths.SCREENSHOTS, exist_ok=True)
         name = time.strftime("haunted-%Y%m%d-%H%M%S.png")
         Image.fromarray(self.canvas()).save(os.path.join(paths.SCREENSHOTS, name))
+
+
+def draw_note(canvas, text):
+    """A message across the bottom of the view, on a dark band (clear of the status and the floor's name)."""
+    top = NOTE_Y
+    canvas[top - 4:top + 12, 8:SCREEN_W - 8] //= 4
+    hud.draw_text(canvas, text, (SCREEN_W - hud.text_width(text)) // 2, top, WHITE)
 
 
 def draw_help(canvas):

@@ -8,6 +8,7 @@ Keys (H in the game shows them; the list is app/controls.py):
        Tab / Enter      GAME SELECT / GAME RESET
        D   the left difficulty switch: lightning on (B, the default) or off (A)
        M   the soundtrack on or off
+       E   the sound effects: remastered (the default) or the original 2600 sound
        V   view: side by side -> remaster -> 2600      P   pause      S   screenshot
        F   fullscreen      H   help      Esc   quit
 """

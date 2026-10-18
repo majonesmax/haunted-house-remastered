@@ -10,6 +10,7 @@ CONTROLS = [
     ("ENTER", "GAME RESET"),
     ("D", "LIGHTNING ON/OFF"),
     ("M", "MUSIC ON/OFF"),
+    ("E", "SOUND: NEW / 2600"),
     ("V", "VIEW"),
     ("P", "PAUSE"),
     ("S", "SCREENSHOT"),

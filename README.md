@@ -23,6 +23,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | Tab / Enter | GAME SELECT / GAME RESET |
 | D | the left difficulty switch: lightning on (B, the default) or off (A) |
 | M | the soundtrack on or off |
+| E | the sound effects: remastered (the default) or the original 2600 sound |
 | V | view: side by side, remaster only, 2600 only |
 | P / S / F / H / Esc | pause, screenshot, fullscreen, help, quit |
 
