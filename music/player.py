@@ -58,12 +58,15 @@ class Piece:
 
 
 class MusicPlayer:
-    """A pack's songs, played on a look's sound chip ("chiptune" for the NES, "orchestra" for the SNES)."""
+    """A pack's songs, played on a look's sound chip ("chiptune" for the NES, "orchestra" for the SNES).
+
+    The songs are rendered in the background, the title and first floor first, so making a player costs
+    nothing; a piece that isn't ready yet starts as soon as it is."""
 
     def __init__(self, songs, synth="chiptune"):
         self.songs = songs
-        render = SYNTHS[synth].render
-        self.rendered = {name: render(song) for name, song in songs.items()}
+        self.synth = SYNTHS[synth]
+        self.rendered = {}       # name -> its samples, as the background renders them
         self.loops = {}          # name -> its Piece, kept so it resumes where it was
         self.lock = threading.Lock()
         self.current = None
@@ -71,6 +74,19 @@ class MusicPlayer:
         self.calm_for = 0
         self.on = True
         self.paused = False      # the window's pause: the music waits too
+        self.waiting = False     # the piece wanted isn't rendered yet
+        threading.Thread(target=self.render_all, daemon=True).start()
+
+    def render_all(self):
+        """In the background: every song, those heard first first."""
+        first = [name for name in ("title", "floor1") if name in self.songs]
+        rest = [name for name in self.songs if name not in first]
+        for name in first + rest:
+            self.rendered[name] = self.synth.render(self.songs[name])
+
+    @property
+    def ready(self):
+        return len(self.rendered) == len(self.songs)
 
     def follow(self, state):
         """Called once a frame: switch pieces when the moment changes."""
@@ -80,11 +96,12 @@ class MusicPlayer:
             if self.calm_for < CALM_FRAMES:
                 return
         self.calm_for = 0
-        if wanted != self.playing:
+        if wanted != self.playing or (self.waiting and wanted in self.rendered):
             self.play(wanted)
 
     def play(self, name):
         self.playing = name
+        self.waiting = name in self.songs and name not in self.rendered
         piece = None
         if name in self.rendered:
             song = self.songs[name]

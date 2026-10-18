@@ -10,6 +10,7 @@ One frame (GameWindow.run):
 """
 
 import os
+import threading
 import time
 
 import numpy as np
@@ -49,11 +50,16 @@ WHITE, GREY = (236, 238, 236), (152, 150, 152)
 class GameWindow:
     def __init__(self, rom_path, look_name="nes", pack_name=None):
         self.game = Game(rom_path)
-        self.look = looks.make(look_name, self.game.rom, pack_name)
+        self.looks = {}  # every look made once, so L switches at once (each with its own pack, bar the first)
+        for platform in looks.LOOKS:
+            pack = pack_name if platform == look_name else None
+            self.looks[platform] = looks.make(platform, self.game.rom, pack)
+        self.look = self.looks[look_name]
         pygame.display.init()  # not pygame.init(): that opens pygame's own mixer too, a second sound stream
         self.core = E.Core()
         self.core.load(rom_path)
-        self.music = self.music_for(self.look)
+        self.players = {platform: self.music_for(look) for platform, look in self.looks.items()}
+        self.music = self.players[look_name]
         self.sound = SoundBoard(self.music)
         self.audio = E.AudioOut(int(self.core.av_info().timing.sample_rate), mixer=self.sound.mixer)
         self.note, self.note_frames = "", 0   # a moment's message on screen ("SOUND: ORIGINAL")
@@ -64,6 +70,13 @@ class GameWindow:
         self.frame_no = 0
         self.picture = None
         self.screen = self.set_mode()
+        threading.Thread(target=self.prepare_looks, daemon=True).start()
+
+    def prepare_looks(self):
+        """In the background: every look's picture of every floor, so no floor's first visit hitches."""
+        for look in self.looks.values():
+            for floor in range(4):
+                look.scene(floor)
 
     # --- the loop ------------------------------------------------------------------------------------
     def run(self):
@@ -172,12 +185,13 @@ class GameWindow:
 
     def next_look(self):
         """The next look (each with its own pack), and its soundtrack on its own chip."""
-        platforms = sorted(looks.LOOKS)
+        platforms = sorted(self.looks)
         platform = platforms[(platforms.index(self.look.platform) + 1) % len(platforms)]
-        self.look = looks.make(platform, self.game.rom)
-        on = self.music.on
-        self.music = self.music_for(self.look)
-        self.music.on = on
+        self.look = self.looks[platform]
+        on, paused = self.music.on, self.music.paused
+        self.music = self.players[platform]
+        self.music.on, self.music.paused = on, paused
+        self.music.playing = None  # pick up the moment afresh on the next frame
         self.sound.music = self.music
         pygame.display.set_caption(f"{paths.APP_NAME} - {self.look.name}")
         self.show_note(self.look.name)
