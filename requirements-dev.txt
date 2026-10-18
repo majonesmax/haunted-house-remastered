@@ -1,0 +1,3 @@
+-r requirements.txt
+# development: the readability check (tools/readability.py, ruff.toml)
+ruff==0.17.1

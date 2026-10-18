@@ -1,0 +1,4 @@
+numpy>=2.0
+pillow>=10.0
+pygame-ce>=2.5
+sounddevice>=0.5

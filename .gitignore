@@ -1,0 +1,13 @@
+# personal and third-party material - never published
+private/
+roms/
+cores/
+reference/
+STATE.md
+
+# generated / local
+shots/
+__pycache__/
+.venv/
+.ruff_cache/
+.DS_Store

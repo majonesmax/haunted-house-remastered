@@ -1,0 +1,33 @@
+# Readability rules for code written with (or by) an AI assistant - see CLAUDE.md "Readable code".
+# Only rules about how easy code is to read; tools/readability.py adds a check for too-short names and keeps
+# the counts from growing (tools/readability_baseline.json).
+
+line-length = 110
+extend-exclude = ["private", "shots", "recordings", "art", "package/build", "package/dist", "package/stage", "lib"]
+
+[lint]
+preview = true                 # only for the rules named below (PLR1702 is a preview rule)
+explicit-preview-rules = true
+select = [
+    "E501",     # a line longer than 110 characters
+    "E701",     # two statements on one line (after a colon)...
+    "E702",     # ...or separated by a semicolon
+    "E731",     # a lambda given a name: write a def
+    "C901",     # a function with too many paths through it
+    "PLR0911",  # too many returns
+    "PLR0912",  # too many branches
+    "PLR0913",  # too many arguments
+    "PLR0915",  # too many statements
+    "PLR1702",  # blocks nested too deep
+    "F821",     # a name that doesn't exist (a rename that missed a spot)
+]
+
+[lint.mccabe]
+max-complexity = 10
+
+[lint.pylint]
+max-args = 7
+max-branches = 12
+max-returns = 6
+max-statements = 50
+max-nested-blocks = 4
