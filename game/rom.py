@@ -16,6 +16,8 @@ The mansion, as the tables describe it (see docs/rom-elements.md for the evidenc
 
 import os
 
+from shared.types import Point
+
 ROM_START = 0xF000
 DEFAULT_ROM = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "roms",
                            "haunted_house.a26")
@@ -87,7 +89,10 @@ GAME_9 = 8           # game numbers are 0-8 in RAM
 FLOOR_LEFT, FLOOR_RIGHT, FLOOR_BOTTOM, FLOOR_TOP = 0x04, 0x94, 0x01, 0xFB  # how far the player can go
 
 
-def load(path=DEFAULT_ROM):
+Exit = tuple[str, int | None]   # a room's way out: ("door", its number), ("edge", None) or ("wall", None)
+
+
+def load(path: str = DEFAULT_ROM) -> bytes:
     with open(path, "rb") as rom_file:
         rom = rom_file.read()
     if len(rom) != 4096:
@@ -95,17 +100,17 @@ def load(path=DEFAULT_ROM):
     return rom
 
 
-def table(rom, name):
+def table(rom: bytes, name: str) -> bytes:
     address, length, _what, _sure = TABLES[name]
     return rom[address - ROM_START: address - ROM_START + length]
 
 
-def byte_at(rom, address):
+def byte_at(rom: bytes, address: int) -> int:
     return rom[address - ROM_START]
 
 
 # --- walls -------------------------------------------------------------------------------------------
-def wall_at(rom, x, y):
+def wall_at(rom: bytes, x: int, y: int) -> bool:
     """Is the point (x, y) inside a wall? The game's own test (its routine at $F2A1), for one point.
 
     Columns are 16 units wide and start at x=16 (column 0); rows are 16 units tall. Outside columns 0-7
@@ -118,7 +123,7 @@ def wall_at(rom, x, y):
     return table(rom, "FLOOR_WALLS")[row] & table(rom, "COLUMN_BITS")[column] != 0
 
 
-def can_step(rom, x, y, direction):
+def can_step(rom: bytes, x: int, y: int, direction: str) -> bool:
     """Could the player at (x, y) take one step in direction? The same points the game tests ($F1BF).
     The player's body is 8 wide and 3 tall: x..x+7, y..y+2. At the floor's limits the game stops you
     (stepping off there is the stairs or the front door, handled elsewhere)."""
@@ -132,13 +137,13 @@ def can_step(rom, x, y, direction):
 
 
 # --- rooms, doors and stairs -------------------------------------------------------------------------
-def room_centre(rom, room):
+def room_centre(rom: bytes, room: int) -> Point:
     return table(rom, "WAYPOINT_X")[room], table(rom, "WAYPOINT_Y")[room]
 
 
-def room_exits(rom, room):
+def room_exits(rom: bytes, room: int) -> dict[str, Exit]:
     """{direction: ("door", number) | ("edge", None) | ("wall", None)} for one room."""
-    exits = {}
+    exits: dict[str, Exit] = {}
     entries = table(rom, "DOOR_IDS")[room * 4: room * 4 + 4]
     for direction, value in zip(DIRECTIONS, entries):
         if value == 0xFF:
@@ -150,17 +155,17 @@ def room_exits(rom, room):
     return exits
 
 
-def doors(rom):
+def doors(rom: bytes) -> dict[int, tuple[int, ...]]:
     """{door number: (room, room)}: which two rooms each door joins."""
-    joins = {}
+    joins: dict[int, set[int]] = {}
     for room in range(ROOM_COUNT):
         for _direction, (kind, number) in room_exits(rom, room).items():
-            if kind == "door":
+            if kind == "door" and number is not None:
                 joins.setdefault(number, set()).add(room)
     return {number: tuple(sorted(rooms)) for number, rooms in sorted(joins.items())}
 
 
-def locked_doors(rom, floor, game):
+def locked_doors(rom: bytes, floor: int, game: int) -> list[int]:
     """Door numbers locked on this floor in this game (game 0-8). Games 1 and 2 (0, 1) have no locks."""
     if game < 2:
         return []
@@ -169,13 +174,13 @@ def locked_doors(rom, floor, game):
     return [number for number in range(DOOR_COUNT) if mask & 1 << number]
 
 
-def stairs(rom, floor, game):
+def stairs(rom: bytes, floor: int, game: int) -> dict[int, dict]:
     """{room: dict(goes="up"|"down", edge=..., x=..., y=...)} for the rooms of a floor that have stairs.
     Room 2 of the first floor is the front door, not stairs."""
     index = floor + 4 if game == GAME_9 else floor
     here = byte_at(rom, TABLES["STAIRS_HERE"][0] + index)
     going_up = byte_at(rom, TABLES["STAIRS_GO_UP"][0] + index)
-    found = {}
+    found: dict[int, dict] = {}
     for room in range(ROOM_COUNT):
         if not here & 1 << room:
             continue
@@ -186,19 +191,19 @@ def stairs(rom, floor, game):
 
 
 # --- pictures ----------------------------------------------------------------------------------------
-def sprite_rows(rom, address, height):
+def sprite_rows(rom: bytes, address: int, height: int) -> list[str]:
     """A sprite as a list of 8-character strings, top row first ('#' = lit). The 2600 draws these
     from the last byte to the first, so the last byte in the ROM is the top row on screen."""
     data = rom[address - ROM_START: address - ROM_START + height]
     return ["".join("#" if byte & 0x80 >> bit else "." for bit in range(8)) for byte in reversed(data)]
 
 
-def item_sprite_address(shape_or_item):
+def item_sprite_address(shape_or_item: int) -> int:
     """Sprite address for item 0 (key), 1 (scepter), or an urn shape 2-8 (see URN_SHAPES)."""
     return 0xFE08 + shape_or_item * 8
 
 
-def monster_sprite_addresses(rom, monster):
+def monster_sprite_addresses(rom: bytes, monster: int) -> tuple[int, int]:
     """The two animation frames of a monster (0 ghost, 1 bat, 2-4 tarantulas)."""
     first = 0xFE50 + table(rom, "MONSTER_FRAMES")[monster]
     return first, first + 10

@@ -24,25 +24,25 @@ JOYSTICK = {"right": (JOY_RIGHT, 0x80), "left": (JOY_LEFT, 0x40), "down": (JOY_D
             "up": (JOY_UP, 0x10)}
 STEP = {"right": (1, 0), "left": (-1, 0), "up": (0, 1), "down": (0, -1)}
 
-results = []
+results: list[tuple[str, bool, str]] = []   # (claim, held?, detail)
 
 
-def check(claim, passed, detail=""):
+def check(claim: str, passed: object, detail: str = "") -> None:
     results.append((claim, bool(passed), detail))
 
 
-def signed(byte):
+def signed(byte: int) -> int:
     return byte - 256 if byte >= 0x80 else byte
 
 
-def room_of(x, y):
+def room_of(x: int, y: int) -> int:
     """The room a floor position is in: right column even, left odd; rows bottom, middle, top."""
     column = 1 if x < 0x50 else 0
     row = 0 if y < 0x50 else 1 if y < 0xA0 else 2
     return row * 2 + column
 
 
-def new_game(lab, game=0):
+def new_game(lab: Lab, game: int = 0) -> bytes:
     """RESET into game number `game` (0-8), stepping SELECT as needed. Returns a save state."""
     while lab.peek(M.GAME_NUMBER) != game:
         lab.hold(SELECT, frames=2)
@@ -52,17 +52,17 @@ def new_game(lab, game=0):
     return lab.save()
 
 
-def light_match(lab):
+def light_match(lab: Lab) -> None:
     lab.hold(BUTTON, frames=2)
     lab.run(1)
 
 
-def walk(lab, direction, frames):
+def walk(lab: Lab, direction: str, frames: int) -> None:
     lab.hold(JOYSTICK[direction][0], frames=frames)
 
 
 # --- experiments -------------------------------------------------------------------------------------
-def starting_values(lab, rom):
+def starting_values(lab: Lab, rom: bytes) -> None:
     check("RESET: 9 lives", lab.peek(M.LIVES) == 9)
     check("RESET: carrying nothing ($FF)", lab.peek(M.CARRIED) == M.NOTHING)
     check("RESET: floor 0, room 2", (lab.peek(M.FLOOR), lab.peek(M.ROOM)) == (0, 2))
@@ -80,14 +80,14 @@ def starting_values(lab, rom):
           table[0] == copied[0] and table[4] == copied[4] and table[6:10] == copied[6:10], copied.hex(" "))
 
 
-def clock_and_frame_flag(lab, _rom):
+def clock_and_frame_flag(lab: Lab, _rom: bytes) -> None:
     before_clock, before_flags = lab.peek(M.CLOCK), lab.peek(M.FLAGS)
     lab.run(1)
     check("$89 counts +1 a frame", lab.peek(M.CLOCK) == (before_clock + 1) & 0xFF)
     check("$8A bit 7 flips every frame", (lab.peek(M.FLAGS) ^ before_flags) & 0x80 == 0x80)
 
 
-def joystick(lab, _rom):
+def joystick(lab: Lab, _rom: bytes) -> None:
     start = lab.save()
     for direction, (button, bit) in JOYSTICK.items():
         lab.load(start)
@@ -103,7 +103,7 @@ def joystick(lab, _rom):
     lab.load(start)
 
 
-def walls(lab, rom):
+def walls(lab: Lab, rom: bytes) -> None:
     """Walk until stopped, from several spots, and compare where the game stops with game.rom.can_step."""
     start = lab.save()
     for direction in ("left", "right", "up", "down"):
@@ -119,7 +119,7 @@ def walls(lab, rom):
     lab.load(start)
 
 
-def doorway_and_stairs(lab, rom):
+def doorway_and_stairs(lab: Lab, rom: bytes) -> None:
     """Room 2 -> down through door 0 -> room 0 -> its bottom-edge stairs -> floor 1."""
     lab.run_until(lambda lab: lab.peek(M.POS_X) <= 0x74, held=[JOY_LEFT])
     frames = lab.run_until(lambda lab: lab.peek(0x88) & 0x80, held=[JOY_DOWN])
@@ -148,7 +148,7 @@ def doorway_and_stairs(lab, rom):
           above.get(0, {}).get("goes") == "down" and lab.peek(0x9B) & 0x0F == 3)
 
 
-def rooms_follow_positions(lab, _rom):
+def rooms_follow_positions(lab: Lab, _rom: bytes) -> None:
     """Wander for a while; the player's and monsters' room bytes should match their positions."""
     moves = ["left", "up", "right", "down", "up", "up", "left", "down", "right", "up"]
     player_agree = player_total = monster_agree = monster_total = 0
@@ -167,20 +167,20 @@ def rooms_follow_positions(lab, _rom):
           monster_agree >= 0.8 * monster_total, f"{monster_agree}/{monster_total}")
 
 
-def park_monsters(lab):
+def park_monsters(lab: Lab) -> None:
     """Put every monster on a far floor, so none wanders in during a test."""
     far_floor = 3 - lab.peek(M.FLOOR)
     for monster in range(5):
         lab.poke(M.MONSTER_FLOOR + monster, far_floor)
 
 
-def run_without_monsters(lab, frames):
+def run_without_monsters(lab: Lab, frames: int) -> None:
     for _ in range(frames):
         park_monsters(lab)
         lab.run(1)
 
 
-def frames_until_match_time_changes(lab, limit=300):
+def frames_until_match_time_changes(lab: Lab, limit: int = 300) -> int | None:
     before = lab.peek(M.MATCH_TIME)
     for count in range(1, limit + 1):
         run_without_monsters(lab, 1)
@@ -189,7 +189,7 @@ def frames_until_match_time_changes(lab, limit=300):
     return None
 
 
-def match(lab, _rom):
+def match(lab: Lab, _rom: bytes) -> None:
     park_monsters(lab)
     light_match(lab)
     check("button: lights a match ($8A bit 6)", lab.peek(M.FLAGS) & 0x40)
@@ -211,13 +211,13 @@ def match(lab, _rom):
           f"${lab.peek(M.MATCHES_USED):02X}")
 
 
-def place_item(lab, item, x, y):
+def place_item(lab: Lab, item: int, x: int, y: int) -> None:
     lab.poke(M.ITEM_FLOOR + item, lab.peek(M.FLOOR))
     lab.poke(M.ITEM_X + item, x)
     lab.poke(M.ITEM_Y + item, y)
 
 
-def items(lab, _rom):
+def items(lab: Lab, _rom: bytes) -> None:
     start = lab.save()
     place_item(lab, 1, lab.peek(M.POS_X) + 6, lab.peek(M.POS_Y) - 2)
     light_match(lab)
@@ -245,7 +245,7 @@ def items(lab, _rom):
     lab.load(start)
 
 
-def winning(lab, _rom):
+def winning(lab: Lab, _rom: bytes) -> None:
     start = lab.save()
     lab.poke(M.CARRIED, 2)
     lab.poke(M.URN_SHAPES, 8)
@@ -262,14 +262,14 @@ def winning(lab, _rom):
     lab.load(start)
 
 
-def put_monster_on_player(lab, monster):
+def put_monster_on_player(lab: Lab, monster: int) -> None:
     lab.poke(M.MONSTER_FLOOR + monster, lab.peek(M.FLOOR))
     lab.poke(M.MONSTER_ROOM + monster, lab.peek(M.ROOM))
     lab.poke(M.MONSTER_X + monster, lab.peek(M.POS_X))
     lab.poke(M.MONSTER_Y + monster, lab.peek(M.POS_Y))
 
 
-def caught(lab, monster, limit=120):
+def caught(lab: Lab, monster: int, limit: int = 120) -> bool:
     """Keep a monster on the player until the game says caught (or limit frames pass)."""
     for _ in range(limit):
         put_monster_on_player(lab, monster)
@@ -279,7 +279,7 @@ def caught(lab, monster, limit=120):
     return False
 
 
-def dying(lab, _rom):
+def dying(lab: Lab, _rom: bytes) -> None:
     start = lab.save()
     put_monster_on_player(lab, 2)
     lab.run(2)
@@ -312,7 +312,7 @@ def dying(lab, _rom):
     lab.load(start)
 
 
-def game_numbers(lab, _rom):
+def game_numbers(lab: Lab, _rom: bytes) -> None:
     start = lab.save()
     number = lab.peek(M.GAME_NUMBER)
     lab.hold(SELECT, frames=2)
@@ -336,7 +336,7 @@ EXPERIMENTS = [starting_values, clock_and_frame_flag, joystick, walls, doorway_a
                rooms_follow_positions, match, items, winning, dying, game_numbers]
 
 
-def main():
+def main() -> None:
     lab = Lab()
     rom = R.load()
     start = new_game(lab, 0)

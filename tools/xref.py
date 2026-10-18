@@ -21,6 +21,9 @@ from lab import HERE, ROM  # noqa: E402
 sys.path.insert(0, HERE)
 from game import ram_map  # noqa: E402
 
+Instruction = tuple[str, str, int | None, int]   # (mnemonic, addressing mode, operand, length in bytes)
+Access = tuple[int, int, str, str]   # (instruction address, its routine, mnemonic, how: read / write...)
+
 ROM_START = 0xF000
 GENERATED = os.path.join(HERE, "docs", "generated")
 
@@ -29,7 +32,7 @@ LENGTH = {"imp": 1, "acc": 1, "imm": 2, "zp": 2, "zpx": 2, "zpy": 2, "izx": 2, "
           "abs": 3, "abx": 3, "aby": 3, "ind": 3}
 
 # opcode -> (mnemonic, mode), the documented 6502 instructions
-OPCODES = {}
+OPCODES: dict[int, tuple[str, str]] = {}
 _TABLE = """
 00 BRK imp|01 ORA izx|05 ORA zp|06 ASL zp|08 PHP imp|09 ORA imm|0A ASL acc|0D ORA abs|0E ASL abs
 10 BPL rel|11 ORA izy|15 ORA zpx|16 ASL zpx|18 CLC imp|19 ORA aby|1D ORA abx|1E ASL abx
@@ -65,49 +68,49 @@ ALWAYS_TAKEN = {"BNE": lambda value: value != 0, "BEQ": lambda value: value == 0
                 "BPL": lambda value: value < 0x80, "BMI": lambda value: value >= 0x80}
 
 
-def read_rom():
+def read_rom() -> bytes:
     with open(ROM, "rb") as rom_file:
         return rom_file.read()
 
 
-def decode(rom, address):
+def decode(rom: bytes, address: int) -> Instruction | None:
     """The instruction at address: (mnemonic, mode, operand value, length), or None if it isn't one."""
     opcode = rom[address - ROM_START]
     if opcode not in OPCODES:
         return None
     mnemonic, mode = OPCODES[opcode]
     length = LENGTH[mode]
-    operand = None
+    operand: int | None = None
     if length == 2:
         operand = rom[address - ROM_START + 1]
+        if mode == "rel":   # a branch (always 2 bytes): the operand is an offset from the next instruction
+            offset = operand - 256 if operand >= 0x80 else operand
+            operand = address + 2 + offset
     elif length == 3:
         operand = rom[address - ROM_START + 1] | rom[address - ROM_START + 2] << 8
-    if mode == "rel":
-        offset = operand - 256 if operand >= 0x80 else operand
-        operand = address + 2 + offset
     return mnemonic, mode, operand, length
 
 
-def trace(rom):
+def trace(rom: bytes) -> tuple[dict[int, Instruction], set[int]]:
     """Follow the code from the reset vector. Returns {address: instruction} and the set of JSR targets."""
     reset = rom[0xFFC] | rom[0xFFD] << 8
     to_visit = [reset]
-    instructions = {}
+    instructions: dict[int, Instruction] = {}
     subroutines = {reset}
     while to_visit:
         address = to_visit.pop()
-        last_constant = None
+        last_constant: int | None = None
         while ROM_START <= address < 0x10000 and address not in instructions:
             instruction = decode(rom, address)
             if instruction is None:
                 break
             instructions[address] = instruction
             mnemonic, mode, operand, length = instruction
-            if mnemonic in ("JSR", "JMP") and mode == "abs":
+            if mnemonic in ("JSR", "JMP") and mode == "abs" and operand is not None:
                 to_visit.append(operand)
                 if mnemonic == "JSR":
                     subroutines.add(operand)
-            if mnemonic in BRANCHES:
+            if mnemonic in BRANCHES and operand is not None:
                 to_visit.append(operand)
                 if always_taken(mnemonic, last_constant):
                     break
@@ -118,13 +121,13 @@ def trace(rom):
     return instructions, subroutines
 
 
-def always_taken(mnemonic, last_constant):
+def always_taken(mnemonic: str, last_constant: int | None) -> bool:
     if mnemonic not in ALWAYS_TAKEN or last_constant is None:
         return False
     return ALWAYS_TAKEN[mnemonic](last_constant)
 
 
-def constant_loaded(mnemonic, mode, operand, previous):
+def constant_loaded(mnemonic: str, mode: str, operand: int | None, previous: int | None) -> int | None:
     """The value the flags now reflect, if an instruction just loaded a constant; else None."""
     if mnemonic in ("LDA", "LDX", "LDY") and mode == "imm":
         return operand
@@ -133,13 +136,13 @@ def constant_loaded(mnemonic, mode, operand, previous):
     return None
 
 
-def ram_accesses(instructions, subroutines):
+def ram_accesses(instructions: dict[int, Instruction], subroutines: set[int]) -> dict[int, list[Access]]:
     """{ram address: [(instruction address, routine, mnemonic, how)]} for every $80-$FF access."""
-    accesses = {}
+    accesses: dict[int, list[Access]] = {}
     routine_starts = sorted(subroutines)
     for address in sorted(instructions):
         mnemonic, mode, operand, _length = instructions[address]
-        if mode not in ("zp", "zpx", "zpy", "izx", "izy") or operand < 0x80:
+        if mode not in ("zp", "zpx", "zpy", "izx", "izy") or operand is None or operand < 0x80:
             continue
         routine = max((start for start in routine_starts if start <= address), default=address)
         how = access_kind(mnemonic, mode)
@@ -148,7 +151,7 @@ def ram_accesses(instructions, subroutines):
     return accesses
 
 
-def access_kind(mnemonic, mode):
+def access_kind(mnemonic: str, mode: str) -> str:
     if mode in ("izx", "izy"):
         return "pointer"
     if mnemonic in READ_AND_WRITE:
@@ -158,18 +161,18 @@ def access_kind(mnemonic, mode):
     return "read"
 
 
-def touched(mode, operand):
+def touched(mode: str, operand: int) -> list[int]:
     if mode in ("izx", "izy"):
         return [operand, operand + 1]  # a pointer: low byte, high byte
     return [operand]
 
 
-def describe_access(mnemonic, mode, how):
+def describe_access(mnemonic: str, mode: str, how: str) -> str:
     index = {"zpx": ",X", "zpy": ",Y", "izy": " (pointer),Y", "izx": " (pointer,X)"}.get(mode, "")
     return f"{mnemonic}{index}"
 
 
-def write_xref(accesses, instructions):
+def write_xref(accesses: dict[int, list[Access]], instructions: dict[int, Instruction]) -> str:
     lines = ["# RAM map and cross-reference (generated by tools/xref.py - do not edit)", "",
              "Name, meaning and how sure we are come from game/ram_map.py (live = checked in the running",
              "game by tools/verify_ram.py; code = read from the code; guess = a working idea). The last two",
@@ -191,8 +194,8 @@ def write_xref(accesses, instructions):
     return path
 
 
-def summarise(found, instructions, kinds):
-    by_routine = {}
+def summarise(found: list[Access], instructions: dict[int, Instruction], kinds: tuple[str, ...]) -> str:
+    by_routine: dict[int, set[str]] = {}
     for address, routine, mnemonic, how in found:
         if how not in kinds:
             continue
@@ -203,7 +206,7 @@ def summarise(found, instructions, kinds):
     return "<br>".join(parts) if parts else ""
 
 
-def write_layout(rom, instructions):
+def write_layout(rom: bytes, instructions: dict[int, Instruction]) -> str:
     """The ROM as alternating runs of code and data."""
     is_code = [False] * len(rom)
     for address, (_mnemonic, _mode, _operand, length) in instructions.items():
@@ -228,7 +231,7 @@ def write_layout(rom, instructions):
     return path
 
 
-def main():
+def main() -> None:
     os.makedirs(GENERATED, exist_ok=True)
     rom = read_rom()
     instructions, subroutines = trace(rom)

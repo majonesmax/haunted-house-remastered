@@ -3,10 +3,15 @@ digits for the shades ("1" darkest). Same sizes as the classic cast (the looks s
 14 x 6, monsters 16 x 20 or less, items 16 x 16, stairs 16 x 32.
 """
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from paint import art, ramp, shades
 from shared.pixelart import glinting
+from shared.types import Picture
+
+Pictures = dict[str, Picture]   # picture name -> the picture, before it's saved as <name>.png
 
 GHOST = shades("012345", [(8, 8, 20)] + ramp((50, 60, 110), (245, 248, 255), 5))
 BAT = {**shades("1234", ramp((30, 6, 46), (170, 90, 210), 4)), "E": (255, 120, 40), "F": (250, 250, 240)}
@@ -303,7 +308,7 @@ WOOD = shades("1234", ramp((30, 16, 8), (210, 150, 90), 4))
 
 
 # --- building the pictures ----------------------------------------------------------------------------
-def eyes(look):
+def eyes(look: str) -> Picture:
     rows = [list(row) for row in EYE.strip("\n").split("\n")]
     column, row = PUPIL_AT[look]
     for down in range(2):
@@ -312,34 +317,34 @@ def eyes(look):
     return pair(["".join(cells) for cells in rows])
 
 
-def pair(rows):
+def pair(rows: Sequence[str]) -> Picture:
     return art("\n".join(row + ".." + row for row in rows), EYES)
 
 
-def ghost_pictures():
+def ghost_pictures() -> Pictures:
     back = GHOST_FRONT.replace("0", "5")
     views = {"down": (GHOST_FRONT, GHOST_FRONT_TAILS), "up": (back, GHOST_FRONT_TAILS),
              "left": (GHOST_SIDE, GHOST_SIDE_TAILS)}
-    pictures = {}
+    pictures: Pictures = {}
     for facing, (body, tails) in views.items():
         for frame, tail in enumerate(tails):
             pictures[f"ghost_{facing}_{frame}"] = art(body.strip("\n") + "\n" + tail.strip("\n"), GHOST)
     return pictures
 
 
-def bat_pictures():
-    pictures = {}
+def bat_pictures() -> Pictures:
+    pictures: Pictures = {}
     for frame, wings in enumerate(BAT_FLAP):
         row, by_facing = BAT_EYES[wings]
         for facing, eyes_row in by_facing.items():
-            rows = wings.strip("\n").split("\n")
+            rows: list[str] = [*wings.strip("\n").split("\n")]   # str rows, so one can be replaced
             rows[row] = eyes_row
             pictures[f"bat_{facing}_{frame}"] = art("\n".join(rows), BAT)
     return pictures
 
 
-def tarantula_pictures():
-    pictures = {}
+def tarantula_pictures() -> Pictures:
+    pictures: Pictures = {}
     for number, (dark, light) in TARANTULA_BODIES.items():
         body = shades("12345", ramp(dark, light, 5))
         legs = {"l": ramp(dark, light, 5)[1], "L": ramp(dark, light, 5)[3], "E": (255, 230, 90)}
@@ -351,8 +356,8 @@ def tarantula_pictures():
     return pictures
 
 
-def urn_shape(shape):
-    keep = set()
+def urn_shape(shape: int) -> Picture:
+    keep: set[int] = set()
     for piece in URN_SHAPE_PIECES[shape]:
         keep.update(URN_PIECE_ROWS[piece])
     urn_rows = URN.strip("\n").split("\n")
@@ -360,7 +365,7 @@ def urn_shape(shape):
     return art("\n".join(rows), URN_COLOURS)
 
 
-def stairs(going_up):
+def stairs(going_up: bool) -> Picture:
     picture = art("\n".join([STEP.strip("\n")] * STAIRS_STEPS), WOOD)
     if not going_up:  # the steps fade into the dark, going down
         fade = np.linspace(1.0, 0.1, picture.shape[0])[:, None, None]
@@ -368,7 +373,7 @@ def stairs(going_up):
     return picture
 
 
-def cast_pictures():
+def cast_pictures() -> Pictures:
     pictures = {f"eyes_{look}": eyes(look) for look in PUPIL_AT}
     pictures["eyes_blink"] = pair(EYE_SHUT.strip("\n").split("\n"))
     pictures.update(ghost_pictures())

@@ -36,33 +36,33 @@ MIDDLE_ROW = 8
 
 rom = R.load()
 palette = ntsc_palette()
-failures = []
+failures: list[str] = []
 
 
-def check(claim, passed, detail=""):
+def check(claim: str, passed: bool, detail: str = "") -> None:
     print(f"{'PASS' if passed else 'FAIL'}  {claim}" + (f"   [{detail}]" if detail else ""))
     if not passed:
         failures.append(claim)
 
 
-def line_of(lab, y):
+def line_of(lab: Lab, y: int) -> int:
     return y - lab.peek(M.POS_Y) + lab.peek(0xCB)
 
 
-def wall_scanline(line):
+def wall_scanline(line: int) -> int:
     return WALL_FIRST_SCANLINE + 2 * (TOP_LINE - line)
 
 
-def sprite_scanline(line):
+def sprite_scanline(line: int) -> int:
     return SPRITE_FIRST_SCANLINE + 2 * (TOP_LINE - line)
 
 
-def park_monsters(lab):
+def park_monsters(lab: Lab) -> None:
     for monster in range(5):
         lab.poke(M.MONSTER_FLOOR + monster, (lab.peek(M.FLOOR) + 2) & 3)
 
 
-def choose_game(lab, game):
+def choose_game(lab: Lab, game: int) -> bytes:
     while lab.peek(M.GAME_NUMBER) != game:
         lab.hold(SELECT, frames=2)
         lab.run(2)
@@ -72,7 +72,7 @@ def choose_game(lab, game):
 
 
 # --- walls -------------------------------------------------------------------------------------------
-def predicted_wall(lab, row, column):
+def predicted_wall(lab: Lab, row: int, column: int) -> bool:
     line = TOP_LINE - (row - WALL_FIRST_SCANLINE) // 2
     y = line - lab.peek(0xCB) + lab.peek(M.POS_Y)
     if not 0 <= y < 256:
@@ -83,7 +83,7 @@ def predicted_wall(lab, row, column):
     return R.wall_at(rom, column, y)
 
 
-def check_walls(lab, start):
+def check_walls(lab: Lab, start: bytes) -> None:
     wall_rgb = np.array(rgb_for(palette, colour_number(rom, 8)))
     for player_y in (0x10, 0x40, 0x86, 0xB8, 0xF0):
         lab.load(start)
@@ -100,7 +100,7 @@ def check_walls(lab, start):
 
 
 # --- the eyes ----------------------------------------------------------------------------------------
-def check_eyes(lab, start):
+def check_eyes(lab: Lab, start: bytes) -> None:
     for player_x, player_y in ((0x80, 0x86), (0x61, 0x70), (0x74, 0x10), (0x74, 0xF0)):
         lab.load(start)
         park_monsters(lab)
@@ -117,7 +117,7 @@ def check_eyes(lab, start):
 
 
 # --- sprites -----------------------------------------------------------------------------------------
-def check_sprites(lab):
+def check_sprites(lab: Lab) -> None:
     """The master key (game 3: green, shown only by a lit match) at offsets that stay clear of the eyes."""
     start = choose_game(lab, 2)
     key_rgb = np.array(rgb_for(palette, colour_number(rom, R.table(rom, "ITEM_COLOURS")[0])))
@@ -145,7 +145,7 @@ def check_sprites(lab):
               f"drawn {found}, rule {expected}")
 
 
-def main():
+def main() -> None:
     lab = Lab()
     start = choose_game(lab, 0)
     check_walls(lab, start)

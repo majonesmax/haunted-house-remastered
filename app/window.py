@@ -36,10 +36,11 @@ from music.board import SoundBoard
 from music.player import MusicPlayer
 from game import emulator as E
 from game import paths
-from game.state import Game
-from looks.base import SCREEN_W, Extras
+from game.state import Game, GameState
+from looks.base import SCREEN_H, SCREEN_W, Extras, FloorLook
 from shared import hud
 from shared.storm import Storm
+from shared.types import Picture
 
 JOYSTICK = {pygame.K_UP: E.JOY_UP, pygame.K_DOWN: E.JOY_DOWN, pygame.K_LEFT: E.JOY_LEFT,
             pygame.K_RIGHT: E.JOY_RIGHT, pygame.K_SPACE: E.JOY_B,
@@ -63,9 +64,10 @@ WHITE, GREY, RED, AMBER = (236, 238, 236), (152, 150, 152), (230, 40, 40), (240,
 
 
 class GameWindow:
-    def __init__(self, rom_path, look_name="nes", pack_name=None):
+    def __init__(self, rom_path: str, look_name: str = "nes", pack_name: str | None = None):
         self.game = Game(rom_path)
-        self.looks = {}  # every look made once, so L switches at once (each with its own pack, bar the first)
+        self.looks: dict[str, FloorLook] = {}  # every look made once, so L switches at once (each with its
+                                               # own pack, bar the first)
         for platform in looks.LOOKS:
             pack = pack_name if platform == look_name else None
             self.looks[platform] = looks.make(platform, self.game.rom, pack)
@@ -73,7 +75,8 @@ class GameWindow:
         pygame.display.init()  # not pygame.init(): that opens pygame's own mixer too, a second sound stream
         self.core = E.Core()
         self.core.load(rom_path)
-        self.players = {platform: self.music_for(look) for platform, look in self.looks.items()}
+        self.players: dict[str, MusicPlayer] = {platform: self.music_for(look)
+                                                for platform, look in self.looks.items()}
         self.music = self.players[look_name]
         self.sound = SoundBoard(self.music)
         rate = int(self.core.av_info().timing.sample_rate)
@@ -81,26 +84,27 @@ class GameWindow:
         self.recorder = Recorder(paths.RECORDINGS, rate)
         self.audio.tap = self.recorder.audio_tap
         self.panel = RamPanel()
-        self.note, self.note_frames = [], 0   # a moment's message on screen: its lines ("SOUND: ORIGINAL")
-        self.lights_on = False    # O: the cheat - the whole floor lit, everything on it shown
+        self.note: list[str] = []      # a moment's message on screen: its lines ("SOUND: ORIGINAL")...
+        self.note_frames = 0           # ...and for how many more frames
+        self.lights_on = False         # O: the cheat - the whole floor lit, everything on it shown
         self.view = "both"
         self.paused = self.fullscreen = False
-        self.help = 0   # H: 0 hidden, 1 the keys, 2 how to play
+        self.help = 0                  # H: 0 hidden, 1 the keys, 2 how to play
         self.lightning = True          # the left difficulty switch at B, the console's default
         self.switch_held = 0
         self.frame_no = 0
         self.intro = True              # the story, at launch, until a key is pressed
         self.keys_held_off = False     # after the story: the key that ended it isn't passed to the game
-        self.pressed_by_check = set()  # keys held by play.py --check (app/self_check.py), as if pressed
+        self.pressed_by_check: set[int] = set()   # keys held by play.py --check, as if pressed
         self.scenes_ready = False      # every look's floors drawn (prepare_looks)
         self.storm = Storm()
-        self.state = None
-        self.picture = None             # your look's screen this frame
-        self.other_picture = None       # the other look's, when the grid or the recorder needs it
+        self.state: GameState | None = None
+        self.picture: Picture | None = None        # your look's screen this frame
+        self.other_picture: Picture | None = None  # the other look's, when the grid or the recorder needs it
         self.screen = self.set_mode()
         threading.Thread(target=self.prepare_looks, daemon=True).start()
 
-    def prepare_looks(self):
+    def prepare_looks(self) -> None:
         """In the background: every look's picture of every floor, so no floor's first visit hitches."""
         for look in self.looks.values():
             for floor in range(4):
@@ -108,13 +112,13 @@ class GameWindow:
         self.scenes_ready = True
 
     @property
-    def loading(self):
+    def loading(self) -> bool:
         """Still making things in the background? While it is, the game waits and nothing is heard."""
         players_ready = all(player.ready for player in self.players.values())
         return not (self.scenes_ready and players_ready and self.sound.ambience.ready)
 
     # --- the loop ------------------------------------------------------------------------------------
-    def run(self):
+    def run(self) -> None:
         clock = pygame.time.Clock()
         loading_frames = 0
         while self.handle_input():
@@ -133,10 +137,11 @@ class GameWindow:
         self.stop_recording()
         pygame.quit()
 
-    def play_frame(self):
+    def play_frame(self) -> None:
         """One frame of the game: run it, hear it, draw it (each look that's needed), record it."""
         self.step_game()
         before = self.state
+        assert self.core.ram is not None   # the ROM was loaded when the window was made
         state = self.state = self.game.state(self.core.ram)
         state.lights_on = self.lights_on
         if before is not None and hints.urn_just_whole(before, state):
@@ -152,12 +157,12 @@ class GameWindow:
         self.frame_no += 1
 
     @property
-    def other_look(self):
+    def other_look(self) -> FloorLook:
         """The grid's comparison: the next look after yours."""
         platforms = sorted(self.looks)
         return self.looks[platforms[(platforms.index(self.look.platform) + 1) % len(platforms)]]
 
-    def handle_input(self):
+    def handle_input(self) -> bool:
         """Keys -> the joystick, or a window command. False = quit."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -171,7 +176,7 @@ class GameWindow:
                     self.intro, self.keys_held_off = False, True
         return True
 
-    def weather(self, state):
+    def weather(self, state: GameState) -> tuple[float, bool]:
         """(the distant lightning's flash, 0-1; does its thunder arrive now?) - over the story and in play,
         not on the title (it has its own) or after a win (the storm has passed), and only while the
         lightning switch is on (D)."""
@@ -179,7 +184,7 @@ class GameWindow:
             return 0.0, False
         return self.storm.flash(self.frame_no), self.storm.thunder(self.frame_no)
 
-    def step_game(self):
+    def step_game(self) -> None:
         pressed = pygame.key.get_pressed()
         held = {button for key, button in JOYSTICK.items() if pressed[key] or key in self.pressed_by_check}
         if self.keys_held_off and not held:
@@ -194,7 +199,7 @@ class GameWindow:
         self.core.run()
         self.audio.push(self.core.take_audio())
 
-    def record(self, state):
+    def record(self, state: GameState) -> None:
         if not self.recorder.active:
             return
         pictures = {"a2600": np.asarray(self.core.frame), self.look.platform: self.picture,
@@ -204,28 +209,30 @@ class GameWindow:
         self.recorder.frame(pictures, details, state.ram)
 
     # --- showing it ----------------------------------------------------------------------------------
-    def canvas(self):
+    def canvas(self) -> Picture:
         """The current view as one RGB array (app/views.py), the help and messages on your look."""
-        playing = self.picture.copy()
+        blank = np.zeros((SCREEN_H, SCREEN_W, 3), np.uint8)   # before the first picture (a key pressed early)
+        playing = self.picture.copy() if self.picture is not None else blank
         if self.help == 1:
             draw_help(playing)
         elif self.help == 2:
             draw_how_to_play(playing)
         if self.note_frames:
             draw_note(playing, self.note)
-        grid_extras = None
+        grid_extras: V.GridExtras | None = None
         if self.view == "grid":
             other = self.other_picture if self.other_picture is not None else np.zeros_like(playing)
             ram_pane = self.panel.draw(self.state) if self.state is not None else None
             grid_extras = (other, ram_pane, (self.look.name, self.other_look.name))
-        canvas = V.compose(self.view, playing, self.core.frame, grid_extras)
+        original = self.core.frame if self.core.frame is not None else np.zeros((228, 160, 3), np.uint8)
+        canvas = V.compose(self.view, playing, original, grid_extras)
         if self.recorder.active and self.frame_no // 30 % 2 == 0:
             draw_recording_light(canvas)
         if self.lights_on:
             draw_cheat_mark(canvas)
         return canvas
 
-    def show(self, loading=False):
+    def show(self, loading: bool = False) -> None:
         if self.picture is None:
             return
         canvas = self.picture if loading else self.canvas()
@@ -236,7 +243,7 @@ class GameWindow:
             V.fit_into(surface, self.screen)
         pygame.display.flip()
 
-    def loading_screen(self, frame_no):
+    def loading_screen(self, frame_no: int) -> Picture:
         """While the app gets ready: the eyes in the dark, blinking, and a word."""
         width, height = self.size()
         screen = np.zeros((height, width, 3), np.uint8)
@@ -249,10 +256,10 @@ class GameWindow:
         hud.draw_text(screen, word, (width - hud.text_width("LOADING...")) // 2, height // 2 + 16, GREY)
         return screen
 
-    def size(self):
+    def size(self) -> tuple[int, int]:
         return V.size(self.view)
 
-    def set_mode(self):
+    def set_mode(self) -> pygame.Surface:
         """The window for the current view, its picture shown scaled to fit (SCALED). A view bigger than the
         screen allows (the grid, on a laptop) opens at a size that fits, and show() shrinks the picture
         into it. On macOS, fullscreen keeps its window whatever the view: a new window would leave
@@ -275,27 +282,27 @@ class GameWindow:
         return pygame.display.set_mode((int(width * shrink), int(height * shrink)), flags)
 
     # --- window commands -----------------------------------------------------------------------------
-    def toggle_lightning(self):
+    def toggle_lightning(self) -> None:
         """The left difficulty switch: B lets lightning flash (the default), A stops it."""
         self.lightning = not self.lightning
         self.switch_held = SWITCH_FRAMES
         self.show_note("LIGHTNING: " + ("ON (B)" if self.lightning else "OFF (A)"))
 
-    def next_view(self):
+    def next_view(self) -> None:
         """V: side by side -> the remaster -> the 2600 -> the grid."""
         self.view = V.VIEWS[(V.VIEWS.index(self.view) + 1) % len(V.VIEWS)]
         self.screen = self.set_mode()
 
-    def toggle_pause(self):
+    def toggle_pause(self) -> None:
         self.paused = not self.paused
         self.audio.expect = not self.paused
         self.music.paused = self.paused
 
-    def music_for(self, look):
+    def music_for(self, look: FloorLook) -> MusicPlayer:
         """The look's pack's soundtrack, on the look's sound chip."""
         return MusicPlayer(chiptune.load_songs(look.pack.folder), look.synth)
 
-    def next_look(self):
+    def next_look(self) -> None:
         """The next look (each with its own pack), and its soundtrack on its own chip."""
         platforms = sorted(self.looks)
         platform = platforms[(platforms.index(self.look.platform) + 1) % len(platforms)]
@@ -308,33 +315,33 @@ class GameWindow:
         pygame.display.set_caption(f"{paths.APP_NAME} - {self.look.name}")
         self.show_note(self.look.name)
 
-    def toggle_music(self):
+    def toggle_music(self) -> None:
         self.show_note("MUSIC: ON" if self.music.toggle() else "MUSIC: OFF - JUST THE HOUSE")
 
-    def toggle_effects(self):
+    def toggle_effects(self) -> None:
         remastered = self.sound.toggle_effects()
         self.show_note("SOUND: " + ("REMASTERED" if remastered else "ORIGINAL 2600"))
 
-    def show_note(self, text, frames=NOTE_FRAMES):
+    def show_note(self, text: str | list[str], frames: int = NOTE_FRAMES) -> None:
         """A message on screen for a moment: one line, or a list of them."""
         self.note, self.note_frames = [text] if isinstance(text, str) else text, frames
 
-    def toggle_lights(self):
+    def toggle_lights(self) -> None:
         """O: the cheat - turn the lights on (everything on the floor shows), or off again."""
         self.lights_on = not self.lights_on
         turned_on = ["LIGHTS ON - A CHEAT.", "PICKING UP NEEDS A MATCH LIT.", "O AGAIN TURNS THEM OFF."]
         self.show_note(turned_on if self.lights_on else "LIGHTS OFF")
 
-    def give_hint(self):
+    def give_hint(self) -> None:
         """G: what you need next, and which way (game/hints.py) - the same until something changes."""
         if self.state is not None:
             self.show_note(hints.hint(self.state, self.game.rom), HINT_FRAMES)
 
-    def toggle_help(self):
+    def toggle_help(self) -> None:
         """H: the keys, then how to play, then neither."""
         self.help = (self.help + 1) % 3
 
-    def toggle_fullscreen(self):
+    def toggle_fullscreen(self) -> None:
         """F. On macOS the same window grows into fullscreen, and coming out, a new window opens at the view's
         own size (whatever views were chosen meanwhile). Elsewhere a new window either way."""
         self.fullscreen = not self.fullscreen
@@ -343,7 +350,7 @@ class GameWindow:
         else:
             self.screen = self.set_mode()
 
-    def toggle_recording(self):
+    def toggle_recording(self) -> None:
         """R: start or stop recording (app/recorder.py)."""
         if self.recorder.active:
             self.stop_recording()
@@ -351,32 +358,32 @@ class GameWindow:
         folder = self.recorder.start()
         self.show_note("RECORDING" if folder else "RECORDING NEEDS FFMPEG")
 
-    def stop_recording(self):
+    def stop_recording(self) -> None:
         finished = self.recorder.stop()
         if finished:
             folder, frames = finished
             print(f"recording saved: {folder} ({frames} frames)", flush=True)
             self.show_note(f"SAVED {frames} FRAMES")
 
-    def screenshot(self):
+    def screenshot(self) -> None:
         os.makedirs(paths.SCREENSHOTS, exist_ok=True)
         name = time.strftime("haunted-%Y%m%d-%H%M%S.png")
         Image.fromarray(self.canvas()).save(os.path.join(paths.SCREENSHOTS, name))
 
 
-def draw_cheat_mark(canvas):
+def draw_cheat_mark(canvas: Picture) -> None:
     """While the lights are on: LIGHTS ON, top right, in amber - on the window, never in a recording."""
     words = "LIGHTS ON"
     hud.draw_text(canvas, words, canvas.shape[1] - hud.text_width(words) - 6, 6, AMBER)
 
 
-def draw_recording_light(canvas):
+def draw_recording_light(canvas: Picture) -> None:
     """A blinking red dot and REC, top left: on the window, never in the recording."""
     canvas[6:14, 6:14] = RED
     hud.draw_text(canvas, "REC", 18, 6, RED)
 
 
-def draw_note(canvas, lines):
+def draw_note(canvas: Picture, lines: list[str]) -> None:
     """A message across the bottom of the view, on a dark band (clear of the status and the floor's name);
     more lines rise above the first."""
     top = NOTE_Y - (len(lines) - 1) * NOTE_LINE
@@ -385,7 +392,7 @@ def draw_note(canvas, lines):
         hud.draw_text(canvas, line, (SCREEN_W - hud.text_width(line)) // 2, top + row * NOTE_LINE, WHITE)
 
 
-def draw_how_to_play(canvas):
+def draw_how_to_play(canvas: Picture) -> None:
     """The goal and the rules the original never explains (game/guide.py), over the picture."""
     height = 12 + len(guide.HOW_TO_PLAY) * 11
     canvas[4:4 + height, 4:SCREEN_W - 4] //= 5
@@ -394,7 +401,7 @@ def draw_how_to_play(canvas):
         hud.draw_text(canvas, line, 8, 10 + row * 11, colour)
 
 
-def draw_help(canvas):
+def draw_help(canvas: Picture) -> None:
     """The keys, over the top-left of the picture."""
     height = 16 + len(CONTROLS) * 12
     canvas[8:8 + height, 8:SCREEN_W - 8] = canvas[8:8 + height, 8:SCREEN_W - 8] // 4

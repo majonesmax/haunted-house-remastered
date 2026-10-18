@@ -19,9 +19,11 @@ import wave
 
 import numpy as np
 
+from game.state import GameState
 from music.chiptune import RATE
 from music.house import (NOISES, at, birdsong, drip, floorboard, panned, rain, seconds, thunder, ticking,
                          wind)
+from shared.types import Floats, Samples
 
 BED_LEVEL = 700         # a bed's average loudness: a background, under what happens in it
 BED_PEAK = 4000         # a bed's loudest moments are rounded off towards this
@@ -36,21 +38,21 @@ STEP_EVERY = 2          # a floorboard for every second footstep (music/events.p
 
 
 # --- the beds -------------------------------------------------------------------------------------------
-def outside():
+def outside() -> Floats:
     return rain(1) + 0.6 * wind(2)
 
 
-def foyer():
+def foyer() -> Floats:
     track = rain(3)
     ticking(track, pan=0.5)
     return track
 
 
-def dining_hall():
+def dining_hall() -> Floats:
     return rain(4)
 
 
-def conservatory():
+def conservatory() -> Floats:
     track = rain(5, taps_a_second=60)
     rng = np.random.default_rng(6)
     for seed in range(14):
@@ -58,11 +60,11 @@ def conservatory():
     return track
 
 
-def attic():
+def attic() -> Floats:
     return 0.6 * rain(7, taps_a_second=15) + wind(8)
 
 
-def dawn():
+def dawn() -> Floats:
     """After the win: the storm has passed - a breeze, and birds waking."""
     track = 0.25 * wind(9)
     rng = np.random.default_rng(10)
@@ -75,14 +77,14 @@ PLACES = {"outside": outside, "dawn": dawn, "floor1": foyer, "floor2": dining_ha
           "floor4": attic}
 
 
-def bed_pcm(track):
+def bed_pcm(track: Floats) -> Samples:
     """To int16 at BED_LEVEL on average, peaks rounded off below BED_PEAK."""
     average = np.sqrt((track ** 2).mean())
     scaled = track / max(1e-9, average) * BED_LEVEL
     return (BED_PEAK * np.tanh(scaled / BED_PEAK)).astype(np.int16)
 
 
-def one_off_pcm(sound, level, pan=0.0):
+def one_off_pcm(sound: Floats, level: float, pan: float = 0.0) -> Samples:
     """A one-off sound (mono or stereo) to int16 stereo at `level` on average while it sounds (its quiet
     tail not counted), peaks rounded off below ONE_OFF_PEAK."""
     stereo = sound if sound.ndim == 2 else panned(sound, pan)
@@ -93,7 +95,7 @@ def one_off_pcm(sound, level, pan=0.0):
     return (ONE_OFF_PEAK * np.tanh(scaled / ONE_OFF_PEAK)).astype(np.int16)
 
 
-def place_for(state, intro):
+def place_for(state: GameState, intro: bool) -> str:
     """Outside in the storm for the story and the title, dawn after a win, else the floor you're on."""
     if state.escaped:
         return "dawn"
@@ -107,18 +109,24 @@ class Ambience:
     """The beds and one-offs, made in the background; each bed keeps its place in its loop."""
 
     def __init__(self):
-        self.beds, self.positions = {}, {}
-        self.thunders, self.steps, self.noises = [], [], []
-        self.place, self.leaving, self.crossfade = None, None, 0
+        self.beds: dict[str, Samples] = {}           # place -> its bed, once made
+        self.positions: dict[str, int] = {}          # place -> where its bed is up to
+        self.thunders: list[Samples] = []
+        self.steps: list[Samples] = []
+        self.noises: list[Samples] = []
+        self.place: str | None = None
+        self.leaving: str | None = None
+        self.crossfade = 0
         self.quiet, self.gain = False, 0.0
-        self.voices = []         # [samples, position] of each one-off playing
-        self.idle, self.last_player, self.steps_taken = 0, None, 0
+        self.voices: list[list] = []   # [samples, position] of each one-off playing
+        self.idle, self.steps_taken = 0, 0
+        self.last_player: tuple[int, int] | None = None
         self.rng = np.random.default_rng()
         self.until_noise = self.rng.integers(*NOISE_GAP)
         self.lock = threading.Lock()
         threading.Thread(target=self.make_all, daemon=True).start()
 
-    def make_all(self):
+    def make_all(self) -> None:
         """A second or two of work, done once in the background."""
         self.thunders = [one_off_pcm(thunder(seed), THUNDER_LEVEL) for seed in range(4)]
         self.steps = [one_off_pcm(floorboard(seed), STEP_LEVEL) for seed in range(8)]
@@ -129,11 +137,11 @@ class Ambience:
             self.beds[name] = bed_pcm(make())
 
     @property
-    def ready(self):
+    def ready(self) -> bool:
         return len(self.beds) == len(PLACES)
 
     # --- following the game ---
-    def follow(self, state, intro, quiet):
+    def follow(self, state: GameState, intro: bool, quiet: bool) -> None:
         """Once a frame. quiet: no music is playing."""
         self.quiet = quiet
         place = place_for(state, intro)
@@ -142,7 +150,7 @@ class Ambience:
                 self.place, self.leaving, self.crossfade = place, self.place, seconds(FADE_SECONDS)
         self.listen_for_stillness(state, intro)
 
-    def listen_for_stillness(self, state, intro):
+    def listen_for_stillness(self, state: GameState, intro: bool) -> None:
         """Stand still where it's quiet, and every few seconds the house makes a noise."""
         still = intro or (state.mode == "playing" and state.player == self.last_player)
         self.last_player = state.player
@@ -156,27 +164,27 @@ class Ambience:
                 self.play(self.noises[self.rng.integers(len(self.noises))])
                 self.until_noise = self.rng.integers(*NOISE_GAP)
 
-    def thunder(self):
+    def thunder(self) -> None:
         if self.thunders:
             self.play(self.thunders[self.rng.integers(len(self.thunders))])
 
-    def step(self):
+    def step(self) -> None:
         """A footstep where it's quiet: an old floorboard."""
         self.steps_taken += 1
         if self.steps and self.steps_taken % STEP_EVERY == 1:
             self.play(self.steps[self.rng.integers(len(self.steps))])
 
-    def play(self, samples):
+    def play(self, samples: Samples) -> None:
         with self.lock:
             self.voices.append([samples, 0])
 
-    def hush(self):
+    def hush(self) -> None:
         """Stop the one-offs (the player chose the 2600's sound)."""
         with self.lock:
             self.voices = []
 
     # --- the sound card's callback ---
-    def render(self, count):
+    def render(self, count: int) -> Samples:
         """The next `count` stereo samples: the bed (as loud as the quiet allows) and the one-offs."""
         with self.lock:
             out = self.bed(count) * self.fade_gain(count)[:, None]
@@ -188,14 +196,14 @@ class Ambience:
             self.voices = [voice for voice in self.voices if voice[1] < len(voice[0])]
         return np.clip(out, -32767, 32767).astype(np.int16)
 
-    def fade_gain(self, count):
+    def fade_gain(self, count: int) -> Floats:
         """The beds' loudness through these samples, moving towards full when quiet, none when not."""
         target = 1.0 if self.quiet else 0.0
         most = count / seconds(FADE_SECONDS)
         start, self.gain = self.gain, self.gain + float(np.clip(target - self.gain, -most, most))
         return np.linspace(start, self.gain, count)
 
-    def bed(self, count):
+    def bed(self, count: int) -> Floats:
         out = self.take(self.place, count).astype(np.float32)
         if self.crossfade:
             done = seconds(FADE_SECONDS) - self.crossfade + np.arange(count)
@@ -204,17 +212,18 @@ class Ambience:
             self.crossfade = max(0, self.crossfade - count)
         return out
 
-    def take(self, place, count):
-        """`count` samples of a place's bed from where it left off; silence if it isn't made yet."""
-        bed = self.beds.get(place)
-        if bed is None:
+    def take(self, place: str | None, count: int) -> Samples:
+        """`count` samples of a place's bed from where it left off; silence if there's no place yet, or its
+        bed isn't made yet."""
+        bed = self.beds.get(place) if place is not None else None
+        if place is None or bed is None:
             return np.zeros((count, 2), np.int16)
         start = self.positions.get(place, 0)
         self.positions[place] = (start + count) % len(bed)
         return bed[(start + np.arange(count)) % len(bed)]
 
 
-def attic_visit():
+def attic_visit() -> Samples:
     """To listen to: 30 seconds in the attic - walking for 8, then standing still while the house speaks."""
     track = np.tile(bed_pcm(attic()), (2, 1))[:seconds(30)].astype(np.float32)
     steps = [one_off_pcm(floorboard(seed), STEP_LEVEL) for seed in range(8)]
@@ -229,7 +238,7 @@ def attic_visit():
     return np.clip(track, -32767, 32767).astype(np.int16)
 
 
-def main():
+def main() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = os.path.join(root, "shots", "ambience")
     os.makedirs(out, exist_ok=True)

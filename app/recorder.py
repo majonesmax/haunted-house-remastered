@@ -25,14 +25,18 @@ import threading
 import time
 import wave
 
+from typing import Any
+
 import numpy as np
+
+from shared.types import Picture, Samples
 
 FPS = 60
 STREAMS = {"a2600": (160, 228), "nes": (256, 240), "snes": (256, 240)}
 QUEUE_FRAMES = 240
 
 
-def find_ffmpeg():
+def find_ffmpeg() -> str | None:
     """ffmpeg on the PATH - or, as apps started from the macOS Finder get a bare PATH, in Homebrew's places.
     None if it isn't installed."""
     for path in (shutil.which("ffmpeg"), "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"):
@@ -44,40 +48,42 @@ def find_ffmpeg():
 class Video:
     """One ffmpeg process, fed raw RGB frames from a queue on its own thread."""
 
-    def __init__(self, ffmpeg, path, size, quality=0):
+    def __init__(self, ffmpeg: str, path: str, size: tuple[int, int], quality: int = 0):
         width, height = size
         self.size = size
         command = [ffmpeg, "-loglevel", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24",
                    "-s", f"{width}x{height}", "-r", str(FPS), "-i", "-", "-c:v", "libx264rgb",
                    "-preset", "ultrafast", "-crf", str(quality), path]
         self.process = subprocess.Popen(command, stdin=subprocess.PIPE)
-        self.frames = queue.Queue(maxsize=QUEUE_FRAMES)
+        assert self.process.stdin is not None   # stdin=PIPE: Popen always opens it
+        self.pipe = self.process.stdin
+        self.frames: queue.Queue[Picture | None] = queue.Queue(maxsize=QUEUE_FRAMES)
         self.thread = threading.Thread(target=self.write_all, daemon=True)
         self.thread.start()
 
-    def write_all(self):
+    def write_all(self) -> None:
         while (frame := self.frames.get()) is not None:
-            self.process.stdin.write(frame.tobytes())
-        self.process.stdin.close()
+            self.pipe.write(frame.tobytes())
+        self.pipe.close()
         self.process.wait()
 
-    def put(self, frame):
+    def put(self, frame: Picture | None) -> None:
         width, height = self.size
         if frame is None or frame.shape[:2] != (height, width):   # a missing frame never stops the video
             frame = np.zeros((height, width, 3), np.uint8)
         self.frames.put(np.ascontiguousarray(frame, np.uint8))
 
-    def close(self):
+    def close(self) -> None:
         self.frames.put(None)
         self.thread.join()
 
 
 class Recorder:
-    def __init__(self, root, rate):
+    def __init__(self, root: str, rate: int):
         self.root, self.rate = root, rate
         self.active = False
 
-    def start(self):
+    def start(self) -> str | None:
         """Start recording: the folder being written, or None if ffmpeg isn't installed."""
         ffmpeg = find_ffmpeg()
         if ffmpeg is None:
@@ -85,39 +91,40 @@ class Recorder:
         stamp = time.strftime("%Y%m%d-%H%M%S")
         self.folder = os.path.join(self.root, stamp)
         os.makedirs(self.folder, exist_ok=True)
-        self.videos = {name: Video(ffmpeg, os.path.join(self.folder, f"{name}.mp4"), size)
+        self.videos: dict[str, Video] = {name: Video(ffmpeg, os.path.join(self.folder, f"{name}.mp4"), size)
                        for name, size in STREAMS.items()}
         self.ram_file = open(os.path.join(self.folder, "ram.bin"), "wb")
         self.log = open(os.path.join(self.folder, "log.jsonl"), "w")
         self.open_audio()
-        self.frames, self.started, self.pending = 0, time.perf_counter(), []
+        self.frames, self.started = 0, time.perf_counter()
+        self.pending: list[str] = []
         self.write_meta({"fps": FPS, "streams": STREAMS, "audio_rate": self.rate, "started": stamp})
         self.active = True
         return self.folder
 
-    def open_audio(self):
+    def open_audio(self) -> None:
         self.wav = wave.open(os.path.join(self.folder, "audio.wav"), "wb")
         self.wav.setnchannels(2)
         self.wav.setsampwidth(2)
         self.wav.setframerate(self.rate)
-        self.audio_blocks = queue.Queue()
+        self.audio_blocks: queue.Queue[Samples | None] = queue.Queue()
         self.audio_thread = threading.Thread(target=self.write_audio, daemon=True)
         self.audio_thread.start()
 
-    def write_audio(self):
+    def write_audio(self) -> None:
         while (block := self.audio_blocks.get()) is not None:
             self.wav.writeframes(block.tobytes())
 
-    def audio_tap(self, block):
+    def audio_tap(self, block: Samples) -> None:
         """From the sound card's callback, each block as it's played: only a copy is queued."""
         if self.active:
             self.audio_blocks.put(block.copy())
 
-    def event(self, text):
+    def event(self, text: str) -> None:
         if self.active:
             self.pending.append(text)
 
-    def frame(self, pictures, details, ram):
+    def frame(self, pictures: dict[str, Picture | None], details: dict[str, Any], ram: bytes) -> None:
         """pictures: {stream: RGB array}; details: the log line's fields; ram: the 128 bytes."""
         if not self.active:
             return
@@ -130,7 +137,7 @@ class Recorder:
         self.log.write(json.dumps(line) + "\n")
         self.frames += 1
 
-    def stop(self):
+    def stop(self) -> tuple[str, int] | None:
         """Finish the files: (the folder, how many frames), or None if it wasn't recording."""
         if not self.active:
             return None
@@ -147,9 +154,9 @@ class Recorder:
         self.write_meta({"frames": self.frames, "seconds": round(seconds, 3), "measured_fps": measured})
         return self.folder, self.frames
 
-    def write_meta(self, fields):
+    def write_meta(self, fields: dict[str, Any]) -> None:
         path = os.path.join(self.folder, "meta.json")
-        meta = {}
+        meta: dict[str, Any] = {}
         if os.path.exists(path):
             with open(path) as meta_file:
                 meta = json.load(meta_file)
@@ -157,7 +164,7 @@ class Recorder:
             json.dump({**meta, **fields}, meta_file, indent=1)
 
 
-def render_ram_video(folder, rom_path):
+def render_ram_video(folder: str, rom_path: str) -> str:
     """At editing time: ram.mp4, the INTERNALS pane exactly as the grid draws it, from ram.bin."""
     os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
     import pygame
@@ -165,9 +172,12 @@ def render_ram_video(folder, rom_path):
     from app.ram_panel import SIZE, RamPanel
     from game.state import Game
     pygame.display.init()
+    ffmpeg = find_ffmpeg()
+    if ffmpeg is None:
+        raise SystemExit("ram.mp4 needs ffmpeg: https://ffmpeg.org/download.html")
     ram = np.fromfile(os.path.join(folder, "ram.bin"), np.uint8).reshape(-1, 128)
     game, panel = Game(rom_path), RamPanel()
-    video = Video(find_ffmpeg(), os.path.join(folder, "ram.mp4"), SIZE, quality=12)
+    video = Video(ffmpeg, os.path.join(folder, "ram.mp4"), SIZE, quality=12)
     for frame_no, frame_ram in enumerate(ram):
         state = game.state(frame_ram)
         panel.update(state, frame_no)

@@ -8,7 +8,7 @@ knows, so they come from its sound byte: bumping into a wall, and being refused 
 front door without the urn).
 """
 
-from game.state import MONSTER_KINDS
+from game.state import MONSTER_KINDS, GameState
 
 URN_PIECES = {2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 2, 8: 3}   # urn shape -> how many pieces it is
 BUMP, BLOCKED = 3, 2                                      # the game's own sound effect numbers
@@ -19,11 +19,11 @@ PICKUPS = {0: "pickup_key", 1: "pickup_scepter"}         # item number -> its so
 
 class EventWatcher:
     def __init__(self):
-        self.before = None
+        self.before: GameState | None = None
         self.walking = 0
         self.since_thunder = THUNDER_GAP
 
-    def update(self, state):
+    def update(self, state: GameState) -> list[str]:
         """The events between the last frame and this one, as effect names (music/effects.py)."""
         before, self.before = self.before, state
         self.since_thunder += 1
@@ -35,14 +35,14 @@ class EventWatcher:
             events += check(before, state)
         return events
 
-    def match(self, before, state):
+    def match(self, before: GameState, state: GameState) -> list[str]:
         if state.matches_used > before.matches_used:
             return ["match_strike"]
         if before.match_lit and not state.match_lit:
             return ["match_out"]
         return []
 
-    def moving(self, before, state):
+    def moving(self, before: GameState, state: GameState) -> list[str]:
         """Stairs, doorways, rooms, footsteps."""
         if state.floor != before.floor:
             self.walking = 0
@@ -60,7 +60,7 @@ class EventWatcher:
             self.walking = 0
         return events
 
-    def carrying(self, before, state):
+    def carrying(self, before: GameState, state: GameState) -> list[str]:
         """Picking something up, or putting it down (not when it's taken from you, or joined)."""
         if state.carried == before.carried:
             return []
@@ -71,7 +71,7 @@ class EventWatcher:
             return ["drop"]
         return []
 
-    def urn(self, before, state):
+    def urn(self, before: GameState, state: GameState) -> list[str]:
         """Pieces joining: a bigger group than there was."""
         biggest = max(URN_PIECES.get(item.shape, 0) for item in state.items[2:])
         was = max(URN_PIECES.get(item.shape, 0) for item in before.items[2:])
@@ -79,7 +79,7 @@ class EventWatcher:
             return ["urn_whole" if biggest == 3 else "urn_join"]
         return []
 
-    def danger(self, before, state):
+    def danger(self, before: GameState, state: GameState) -> list[str]:
         """Caught; a monster coming into the room; lightning (and its thunder)."""
         events = []
         if state.mode == "dying" and before.mode != "dying":
@@ -91,7 +91,7 @@ class EventWatcher:
             events.append("thunder")
         return events
 
-    def game_sounds(self, before, state):
+    def game_sounds(self, before: GameState, state: GameState) -> list[str]:
         """What only the game knows: a bump into a wall, a door that won't open."""
         if state.sound == before.sound:
             return []
@@ -102,7 +102,7 @@ class EventWatcher:
         return []
 
 
-def monster_sound(state):
+def monster_sound(state: GameState) -> str:
     """The sound of whichever monster is in the room: the ghost, the bat or a tarantula."""
     for monster in state.monsters:
         in_room = monster.floor == state.floor and monster.room in (state.room, state.room_beyond)

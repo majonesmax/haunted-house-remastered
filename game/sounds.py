@@ -17,8 +17,13 @@ Channel 1 - the effects ($93, timed by $90; numbers are the game's own):
 tools/verify_sounds.py checks the model against the running game.
 """
 
+from typing import Callable
+
 from game import ram_map as M
 from game import rom as R
+from game.monsters import State
+
+Registers = tuple[int, int, int]   # one channel's (control, frequency, volume)
 
 EFFECT, EFFECT_TIME = 0x93, 0x90
 MOOD_PITCH, MOOD_DIRECTION, THUNDER = 0x98, 0x92, 0x8F
@@ -32,7 +37,7 @@ WON = 0x44
 TIA_CLOCK = 31440        # Hz, the NTSC sound clock (colour clock / 114)
 
 
-def start_effect(state, rom, effect):
+def start_effect(state: State, rom: bytes, effect: int) -> None:
     """Start an effect ($F88C): the same one already playing isn't restarted, and a bump never cuts
     another effect short."""
     if effect == state[EFFECT]:
@@ -43,7 +48,7 @@ def start_effect(state, rom, effect):
     state[EFFECT_TIME] = R.table(rom, "SOUND_LENGTHS")[effect]
 
 
-def sound_frame(state, rom, stick_pushed):
+def sound_frame(state: State, rom: bytes, stick_pushed: bool) -> tuple[Registers, Registers]:
     """One frame of sound: update the sound bytes in RAM and return the registers it sets:
     ((control 0, frequency 0, volume 0), (control 1, frequency 1, volume 1))."""
     channel_0 = mood(state, rom)
@@ -52,7 +57,7 @@ def sound_frame(state, rom, stick_pushed):
 
 
 # --- channel 0 ---------------------------------------------------------------------------------------
-def mood(state, rom):
+def mood(state: State, rom: bytes) -> Registers:
     game_state = state[M.GAME_STATE]
     if game_state:
         return thunder_or_tune(state, rom)
@@ -66,7 +71,7 @@ def mood(state, rom):
     return (NOISE, frequency & 0x1F, (frequency ^ 0x0F) & 0x0F)
 
 
-def wander_mood(state, rom):
+def wander_mood(state: State, rom: bytes) -> None:
     """$98 walks up or down a step a frame; at every multiple of 16 it may turn, at random ($F773)."""
     pitch = state[MOOD_PITCH]
     if pitch == MOOD_SILENT or (pitch & 0x0F == 0 and (pitch == 0 or pitch & 0x80)):
@@ -79,7 +84,7 @@ def wander_mood(state, rom):
         state[MOOD_PITCH] = pitch + 1
 
 
-def thunder_or_tune(state, rom):
+def thunder_or_tune(state: State, rom: bytes) -> Registers:
     game_state = state[M.GAME_STATE]
     if game_state & 1:  # dying: rumbles of random length, with a silent frame between
         if state[THUNDER] == 0:
@@ -95,7 +100,7 @@ def thunder_or_tune(state, rom):
 
 
 # --- channel 1 ---------------------------------------------------------------------------------------
-def effects(state, rom, stick_pushed):
+def effects(state: State, rom: bytes, stick_pushed: bool) -> Registers:
     if state[M.GAME_STATE]:
         return (0, 0, 0)
     effect, time = state[EFFECT], state[EFFECT_TIME]
@@ -108,7 +113,7 @@ def effects(state, rom, stick_pushed):
 
 
 # Each effect's registers, as (control, frequency, volume) worked out from `time`, the frames left:
-SIMPLE_EFFECTS = {
+SIMPLE_EFFECTS: dict[int, Callable[[int], Registers]] = {
     BLOCKED: lambda time: (6, 8, (time ^ 3) & 0x0F),        # a buzz fading in and out
     BUMP: lambda time: (2, 8, time & 0x0F),                 # a short fading thud
     DOORWAY: lambda time: (NOISE, 6, 0x0F),                 # one frame of loud noise
@@ -119,7 +124,7 @@ SIMPLE_EFFECTS = {
 }
 
 
-def effect_registers(rom, effect, time):
+def effect_registers(rom: bytes, effect: int, time: int) -> Registers:
     """(control, frequency, volume) of an effect, `time` frames from its end."""
     if effect in SIMPLE_EFFECTS:
         return SIMPLE_EFFECTS[effect](time)
@@ -133,14 +138,14 @@ def effect_registers(rom, effect, time):
     return (0, 0, 0)
 
 
-def footsteps(state, stick_pushed):
+def footsteps(state: State, stick_pushed: bool) -> Registers:
     if stick_pushed and state[M.CLOCK] & 7 < 3:
         return (SILENT_HIGH, 0x18, 0x0F)  # control 11 holds the output high: each step is a click
     return (0, 0, 0)
 
 
 # --- what the registers sound like -------------------------------------------------------------------
-def pitch(control, frequency):
+def pitch(control: int, frequency: int) -> float | None:
     """The note (Hz) a pure-tone setting plays, or None for noise and buzz-like settings."""
     dividers = {4: 2, 5: 2, 12: 6, 13: 6, 6: 31, 10: 31}
     if control not in dividers:

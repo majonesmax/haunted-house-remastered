@@ -144,7 +144,7 @@ RAM = {
 }
 
 
-def describe(address):
+def describe(address: int) -> tuple[str, str, str]:
     """(name, meaning, how sure) for any address, following ranges back to their first byte."""
     for start in range(address, 0x7F, -1):
         if start in RAM:

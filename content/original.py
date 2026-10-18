@@ -8,6 +8,9 @@ import numpy as np
 
 from game import palette as P
 from game import rom as R
+from shared.types import Picture, Rgb
+
+NamedFrames = dict[str, list[Picture]]   # picture name -> its frames
 
 EYES_WHITES, EYES_PUPILS = 0xE7, {"centre": 0xA5, "right": 0xC6, "left": 0x63}  # constants in the code
 EYES_PUPIL_ROW = {"up": 2, "down": 0}  # the row (of 3, bottom first) the pupils are on; others: the middle
@@ -17,7 +20,7 @@ URN_COLOUR_INDEX = 6     # urn pieces: palette entry 6 (they shimmer in the orig
 MONSTER_FRAMES = {"ghost": 0, "bat": 1, "tarantula2": 2, "tarantula3": 3, "tarantula4": 4}
 
 
-def sprite(rows, colour):
+def sprite(rows: list[str], colour: Rgb) -> Picture:
     """Rows of "#"/"." (top first) -> an RGBA array in one colour."""
     picture = np.zeros((len(rows), len(rows[0]), 4), np.uint8)
     for y, row in enumerate(rows):
@@ -27,11 +30,11 @@ def sprite(rows, colour):
     return picture
 
 
-def colour_of(rom, palette, index):
+def colour_of(rom: bytes, palette: dict[int, Rgb], index: int) -> Rgb:
     return P.rgb(palette, R.table(rom, "COLOURS")[index])
 
 
-def eyes(look):
+def eyes(look: str) -> Picture:
     pupils = EYES_PUPILS.get(look, EYES_PUPILS["centre"])
     pupil_row = EYES_PUPIL_ROW.get(look, 1)
     data = [EYES_WHITES] * 3
@@ -40,7 +43,7 @@ def eyes(look):
     return sprite(rows, WHITE)
 
 
-def cast(rom):
+def cast(rom: bytes) -> NamedFrames:
     palette = P.load()
     pictures = {f"eyes_{look}": [eyes(look)] for look in ("centre", "left", "right", "up", "down")}
     item_colours = R.table(rom, "ITEM_COLOURS")
@@ -60,10 +63,10 @@ def cast(rom):
     return pictures
 
 
-def world(rom):
+def world(rom: bytes) -> NamedFrames:
     """Solid walls in each floor's 2600 colour on a black floor - the original's look."""
     palette = P.load()
-    pictures = {}
+    pictures: NamedFrames = {}
     for floor in range(R.FLOOR_COUNT):
         wall = np.zeros((16, 16, 4), np.uint8)
         wall[:] = (*colour_of(rom, palette, 8 + floor), 255)

@@ -13,10 +13,14 @@ means - so they can be read, edited and diffed like code:
 Arrays are numpy uint8: sprites are RGBA (alpha 0 = transparent, 255 = solid), screens are RGB.
 """
 
+from collections.abc import Mapping
+
 import numpy as np
 
+from shared.types import Picture, Rgb
 
-def from_ascii(art, colours, strict=False):
+
+def from_ascii(art: str, colours: Mapping[str, Rgb | None], strict: bool = False) -> Picture:
     """Text art -> RGBA sprite. colours: character -> (r, g, b); "." is always transparent. A character that
     isn't in `colours` is transparent too, or an error with strict=True (catches typos in hand-drawn art).
     Rows must all be the same width - a ragged row is reported with its number."""
@@ -29,14 +33,15 @@ def from_ascii(art, colours, strict=False):
         for x, char in enumerate(row):
             if char == ".":
                 continue
-            if char in colours and colours[char] is not None:
-                img[y, x] = (*colours[char], 255)
+            colour = colours.get(char)
+            if colour is not None:
+                img[y, x] = (*colour, 255)
             elif strict:
                 raise KeyError(f"no colour for {char!r} (row {y}, column {x})")
     return img
 
 
-def mirrored(left, shade=None):
+def mirrored(left: str, shade: dict[str, str] | None = None) -> str:
     """Text art for a left-right symmetric sprite, from its left half (each row is mirrored onto the right).
     shade: {fill: shade character} - on each row the right-most run of that fill gets its last pixel
     shaded, so the sprite looks lit from the left."""
@@ -52,7 +57,7 @@ def mirrored(left, shade=None):
     return "\n" + "\n".join(rows)
 
 
-def edited(art, edits):
+def edited(art: str, edits: dict[int, list[tuple[int, str]]]) -> str:
     """A copy of text art with parts of some rows replaced: {row: [(column, "text"), ...]}.
     Handy for poses: an attack pose is the normal pose with the arms redrawn."""
     rows = art.strip("\n").split("\n")
@@ -64,34 +69,37 @@ def edited(art, edits):
     return "\n" + "\n".join(rows)
 
 
-def blit(dst, src, x, y):
+def blit(dst: Picture, src: Picture, x: float, y: float) -> None:
     """Paste RGBA sprite `src` onto RGB image `dst` with its top-left at (x, y); clipped at the edges,
     transparent pixels skipped. x, y may be fractional (rounded)."""
-    x, y = int(round(x)), int(round(y))
+    left, top = int(round(x)), int(round(y))
     h, w = src.shape[:2]
-    x0, y0, x1, y1 = max(x, 0), max(y, 0), min(x + w, dst.shape[1]), min(y + h, dst.shape[0])
+    x0, y0 = max(left, 0), max(top, 0)
+    x1, y1 = min(left + w, dst.shape[1]), min(top + h, dst.shape[0])
     if x0 >= x1 or y0 >= y1:
         return
-    visible = src[y0 - y:y1 - y, x0 - x:x1 - x]  # the part of src inside dst
+    visible = src[y0 - top:y1 - top, x0 - left:x1 - left]  # the part of src inside dst
     solid = visible[..., 3:4] > 0
     dst[y0:y1, x0:x1] = np.where(solid, visible[..., :3], dst[y0:y1, x0:x1])
 
 
-def snes_rgb(rgb):
+def snes_rgb(rgb: Picture) -> Picture:
     """Snap colours to the SNES's 15-bit range (5 bits per channel), expanded back to 8 bits."""
     five_bits = np.asarray(rgb, np.uint8) >> 3
-    return (five_bits << 3) | (five_bits >> 2)  # the top bits repeated in the bottom, so 31 -> 255
+    snapped = (five_bits << 3) | (five_bits >> 2)  # the top bits repeated in the bottom, so 31 -> 255
+    return np.asarray(snapped, np.uint8)
 
 
-def shade(rgb, factor):
+def shade(rgb: Rgb, factor: float) -> Rgb:
     """An (r, g, b) colour made lighter (factor > 1) or darker (< 1), capped at 255."""
-    return tuple(int(min(255, channel * factor)) for channel in rgb)
+    red, green, blue = (int(min(255, channel * factor)) for channel in rgb)
+    return red, green, blue
 
 
 GLINT_EVERY = 12         # a glinting picture's frames (8 game frames each): a glint about every 1.6 seconds
 
 
-def glinting(picture, colour, every=GLINT_EVERY):
+def glinting(picture: Picture, colour: Rgb, every: int = GLINT_EVERY) -> list[Picture]:
     """A small thing's frames, with a glint now and then so it catches the eye: plain, then a point of
     light on its top edge, then a little star there."""
     rows, columns = np.nonzero(picture[..., 3])

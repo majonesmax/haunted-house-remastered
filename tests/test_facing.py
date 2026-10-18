@@ -9,21 +9,23 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from game.state import Monster  # noqa: E402
 from looks.base import FACING_MEMORY, Facing  # noqa: E402
+from shared.types import Point  # noqa: E402
 
-failures = []
+failures: list[str] = []
 
 
-def check(claim, passed, detail=""):
+def check(claim: str, passed: bool, detail: object = "") -> None:
     print(f"{'PASS' if passed else 'FAIL'}  {claim}" + (f"   [{detail}]" if detail else ""))
     if not passed:
         failures.append(claim)
 
 
-def walk(steps, heading="left", start=(80, 80), floor=0):
+def walk(steps: list[tuple[int, int]], heading: str = "left", start: Point = (80, 80),
+         floor: int = 0) -> list[str | None]:
     """A monster stepping by each (dx, dy) in turn, one step a frame; returns the facing after each."""
     facing = Facing()
     x, y = start
-    seen = []
+    seen: list[str | None] = []
     for dx, dy in [(0, 0)] + steps:
         x, y = x + dx, y + dy
         facing.update([Monster(2, floor, 0, x, y, heading, False)])
@@ -31,7 +33,7 @@ def walk(steps, heading="left", start=(80, 80), floor=0):
     return seen
 
 
-def main():
+def main() -> int:
     check("before it moves, a monster faces where its plan heads", walk([], heading="up")[-1] == "up")
     check("walking right faces right", walk([(1, 0)] * 4)[-1] == "right")
     check("walking left faces left", walk([(-1, 0)] * 4, heading="right")[-1] == "left")

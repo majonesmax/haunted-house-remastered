@@ -10,14 +10,20 @@ a rail, the wainscot, the skirting), built from small text motifs repeated, plus
 faces. Colours are NES palette numbers (shared/palettes.py). Run draw.py to write the PNGs.
 """
 
+from typing import Any
+
 from shared.palettes import NES
 from shared.pixelart import from_ascii
+from shared.types import Picture, Rgb
+
+Pictures = dict[str, Picture]   # picture name -> the picture, before it's saved as <name>.png
+ArtData = dict[str, Any]        # a floor's or a decoration's description, as written in FLOORS below
 
 CELL_W, CELL_H, FACE_H = 24, 32, 20
 PAPER_H, RAIL_H, WAINSCOT_H, SKIRTING_H = 12, 1, 5, 2   # the face, top to bottom: 20 px
 
 
-def repeat(motif, width, height):
+def repeat(motif: str, width: int, height: int) -> str:
     """Text art filled to width x height by repeating a motif across and down."""
     rows = motif.strip("\n").split("\n")
     filled = []
@@ -27,11 +33,11 @@ def repeat(motif, width, height):
     return "\n".join(filled)
 
 
-def stack(*parts):
+def stack(*parts: str) -> str:
     return "\n".join(part.strip("\n") for part in parts)
 
 
-def colours(numbers):
+def colours(numbers: dict[str, int]) -> dict[str, Rgb | None]:
     return {char: NES[number] for char, number in numbers.items()}
 
 
@@ -391,7 +397,7 @@ FLOORS = [
 ]
 
 
-def face(floor):
+def face(floor: ArtData) -> Picture:
     """The front face of a wall: paper, a gold rail, the wainscot, the skirting (24 x 20)."""
     paper_motif, paper_colours = floor["paper"]
     wainscot_motif, wainscot_colours = floor.get("wainscot", (WAINSCOT_PANEL, WOOD))
@@ -407,18 +413,18 @@ def face(floor):
     return picture
 
 
-def floor_tile(floor):
+def floor_tile(floor: ArtData) -> Picture:
     _kind, motif, numbers = floor["floor"]
     return from_ascii(repeat(motif, CELL_W, CELL_H), colours(numbers), strict=True)
 
 
-def top(floor):
+def top(floor: ArtData) -> Picture:
     motif, numbers = floor["top"]
     return from_ascii(repeat(motif, CELL_W, CELL_H), colours(numbers), strict=True)
 
 
-def world_pictures():
-    pictures = {"front_door": from_ascii(FRONT_DOOR, colours(WOOD), strict=True),
+def world_pictures() -> Pictures:
+    pictures: Pictures = {"front_door": from_ascii(FRONT_DOOR, colours(WOOD), strict=True),
                 "title_mansion": from_ascii(TITLE_MANSION, colours(TITLE_MANSION_COLOURS), strict=True),
                 "title_moon": from_ascii(MOON, colours(MOON_COLOURS), strict=True)}
     for number, floor in enumerate(FLOORS, start=1):
@@ -431,7 +437,7 @@ def world_pictures():
     return pictures
 
 
-def decoration_pictures(number, decoration):
+def decoration_pictures(number: int, decoration: ArtData) -> Pictures:
     """A decoration's pictures, named for scenery.py: frames that flicker, eyes that follow, a lightning
     version."""
     name = f"decor{number}_{decoration['kind']}"
@@ -449,7 +455,7 @@ def decoration_pictures(number, decoration):
     return pictures
 
 
-def with_pupils(art, look):
+def with_pupils(art: str, look: str) -> str:
     """The portrait with its pupils (K) placed in the eye whites, looking one way."""
     rows = [list(row) for row in art.strip("\n").split("\n")]
     for eye_row, eye_column in EYE_WHITES:

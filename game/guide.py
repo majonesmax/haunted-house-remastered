@@ -44,7 +44,7 @@ VERDICTS = [(5, "YOU HARDLY NEEDED A LIGHT"), (15, "A STEADY HAND"), (30, "THE H
             (None, "BUT YOU GOT OUT")]   # by matches used, fewest first: fewer is better
 
 
-def verdict(matches):
+def verdict(matches: int) -> str:
     """A line on how you did: the fewer matches, the better."""
     for most, line in VERDICTS:
         if most is None or matches <= most:
@@ -52,7 +52,7 @@ def verdict(matches):
     return ""
 
 
-def game_rules(game):
+def game_rules(game: int) -> list[str]:
     """Short lines saying what game `game` (1-9) is like."""
     rules = ["THE WALLS SHOW" if game == 1 else "THE HOUSE IS DARK"]
     rules.append("LOCKED DOORS" if game >= 3 else "NO LOCKED DOORS")

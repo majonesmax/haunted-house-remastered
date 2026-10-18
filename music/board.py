@@ -17,24 +17,26 @@ import numpy as np
 from music import effects, orchestral_effects
 from music.ambience import Ambience
 from music.events import EventWatcher
-from music.player import mix
+from game.state import GameState
+from music.player import MusicPlayer, mix
+from shared.types import Samples
 
 MAX_VOICES = 8          # effects playing at once; the oldest gives way
 EFFECT_SETS = {"chiptune": effects, "orchestra": orchestral_effects}   # a sound chip -> its effects
 
 
 class SoundBoard:
-    def __init__(self, music):
+    def __init__(self, music: MusicPlayer):
         self.music = music
         self.sound_sets = {chip: maker.render_all() for chip, maker in EFFECT_SETS.items()}
         self.watcher = EventWatcher()
         self.ambience = Ambience()
         self.remastered = True
         self.holding = True     # silent while the app loads (app/window.py); nothing is mixed
-        self.voices = []        # [samples, position] of each effect playing
+        self.voices: list[list] = []   # [samples, position] of each effect playing
         self.lock = threading.Lock()
 
-    def follow(self, state, intro=False, thunder=False):
+    def follow(self, state: GameState, intro: bool = False, thunder: bool = False) -> None:
         """Once a frame: the music follows the game (and the story, while it shows), what just happened is
         heard, and the storm's thunder when it arrives (shared/storm.py)."""
         self.music.follow(state, intro)
@@ -51,16 +53,16 @@ class SoundBoard:
                 self.play(name)
 
     @property
-    def ready(self):
+    def ready(self) -> bool:
         """Is everything heard made: the ambience, and the music for the current look?"""
         return self.ambience.ready and self.music.ready
 
-    def play(self, name):
+    def play(self, name: str) -> None:
         with self.lock:
             self.voices.append([self.sound_sets[self.music.synth_name][name], 0])  # the look's own
             del self.voices[:-MAX_VOICES]
 
-    def toggle_effects(self):
+    def toggle_effects(self) -> bool:
         """Remastered effects <-> the game's own sound. Returns True for remastered."""
         self.remastered = not self.remastered
         with self.lock:
@@ -68,7 +70,7 @@ class SoundBoard:
         self.ambience.hush()
         return self.remastered
 
-    def mixer(self, game_sound):
+    def mixer(self, game_sound: Samples) -> Samples:
         """The sound card's callback: the chosen effects (with the ambience under them), then the music."""
         if self.holding:
             return np.zeros_like(game_sound)
@@ -77,7 +79,7 @@ class SoundBoard:
             sound = mix(self.ambience.render(len(game_sound)), self.next_effects(len(game_sound)))
         return self.music.mixer(sound)
 
-    def next_effects(self, count):
+    def next_effects(self, count: int) -> Samples:
         out = np.zeros((count, 2), np.int32)
         with self.lock:
             for voice in self.voices:

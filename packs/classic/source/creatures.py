@@ -6,15 +6,20 @@ Sizes fit the NES look's footprints (1.5 px a floor unit across, 2 down): the ey
 right); the tarantulas are drawn facing up and turned for the rest.
 """
 
+from collections.abc import Sequence
+
 import numpy as np
 
 from shared.palettes import NES
 from shared.pixelart import from_ascii, glinting
+from shared.types import Picture, Rgb
+
+Pictures = dict[str, Picture]   # picture name -> the picture, before it's saved as <name>.png
 
 OUTLINE = 0x0F
 
 
-def colours(numbers):
+def colours(numbers: dict[str, int]) -> dict[str, Rgb | None]:
     return {char: NES[number] for char, number in numbers.items()}
 
 
@@ -315,7 +320,7 @@ STAIRS_DOWN_FADE = [0x27, 0x27, 0x17, 0x17, 0x07, 0x07, 0x0F, 0x0F]  # the tread
 
 
 # --- building the pictures ------------------------------------------------------------------------------
-def eyes(look):
+def eyes(look: str) -> Picture:
     """A pair of eyes looking one way."""
     rows = [list(row) for row in EYE.strip("\n").split("\n")]
     column, row = PUPIL_AT[look]
@@ -325,23 +330,23 @@ def eyes(look):
     return pair([''.join(cells) for cells in rows])
 
 
-def pair(eye_rows):
+def pair(eye_rows: Sequence[str]) -> Picture:
     joined = [row + "." * EYE_GAP + row for row in eye_rows]
     return from_ascii("\n".join(joined), colours(EYE_COLOURS), strict=True)
 
 
-def eyes_pictures():
+def eyes_pictures() -> Pictures:
     pictures = {f"eyes_{look}": eyes(look) for look in PUPIL_AT}
     pictures["eyes_blink"] = pair(EYE_SHUT.strip("\n").split("\n"))
     return pictures
 
 
-def ghost_pictures():
+def ghost_pictures() -> Pictures:
     """Front (walking down the floor), back (up: the front with no face) and side (left)."""
     back = GHOST_FRONT.replace("K", "W")
     views = {"down": (GHOST_FRONT, GHOST_FRONT_TAILS), "up": (back, GHOST_FRONT_TAILS),
              "left": (GHOST_SIDE, GHOST_SIDE_TAILS)}
-    pictures = {}
+    pictures: Pictures = {}
     for facing, (body, tails) in views.items():
         for frame, tail in enumerate(tails):
             art = body.strip("\n") + "\n" + tail.strip("\n")
@@ -349,19 +354,19 @@ def ghost_pictures():
     return pictures
 
 
-def bat_pictures():
-    pictures = {}
+def bat_pictures() -> Pictures:
+    pictures: Pictures = {}
     for frame, art in enumerate(BAT_FLAP):
         eyes_row, by_facing = BAT_EYES[art]
         for facing, eyes_art in by_facing.items():
-            rows = art.strip("\n").split("\n")
+            rows: list[str] = [*art.strip("\n").split("\n")]   # str rows, so one can be replaced
             rows[eyes_row] = eyes_art
             pictures[f"bat_{facing}_{frame}"] = from_ascii("\n".join(rows), colours(BAT_COLOURS), strict=True)
     return pictures
 
 
-def tarantula_pictures():
-    pictures = {}
+def tarantula_pictures() -> Pictures:
+    pictures: Pictures = {}
     for number, body in TARANTULA_COLOURS.items():
         palette = colours({**body, **TARANTULA_SHARED})
         for frame, art in enumerate(TARANTULA_STEPS):
@@ -372,18 +377,18 @@ def tarantula_pictures():
     return pictures
 
 
-def urn_shape(shape):
+def urn_shape(shape: int) -> Picture:
     """The urn with only the pieces of `shape` drawn."""
-    keep = set()
+    keep: set[int] = set()
     for piece in URN_SHAPE_PIECES[shape]:
         keep.update(URN_PIECE_ROWS[piece])
-    rows = []
+    rows: list[str] = []
     for number, row in enumerate(URN.strip("\n").split("\n")):
         rows.append(row if number in keep else "." * len(row))
     return from_ascii("\n".join(rows), colours(URN_COLOURS), strict=True)
 
 
-def stairs(going_up):
+def stairs(going_up: bool) -> Picture:
     """Eight steps; going down, the treads fade into the dark."""
     step = STEP.strip("\n")
     picture = from_ascii("\n".join([step] * STEPS), colours(STAIRS_COLOURS), strict=True)
@@ -396,7 +401,7 @@ def stairs(going_up):
     return picture
 
 
-def cast_pictures():
+def cast_pictures() -> Pictures:
     pictures = {**eyes_pictures(), **ghost_pictures(), **bat_pictures(), **tarantula_pictures()}
     pictures["hood_0"] = from_ascii(HOOD, colours(HOOD_COLOURS), strict=True)
     for frame, art in enumerate(MATCH_HAND):

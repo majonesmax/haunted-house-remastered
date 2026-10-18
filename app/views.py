@@ -17,24 +17,29 @@ from PIL import Image
 
 from looks.layout import SCREEN_H, SCREEN_W
 from shared import hud
+from shared.types import Mask, Picture, Rgb
+
+GridExtras = tuple[Picture, Picture | None, tuple[str, str]]   # the other look's screen, the RAM pane, the
+                                                               # two looks' names
 
 VIEWS = ("both", "remaster", "2600", "grid")
 ORIGINAL_W = 320                # the 2600's 160 x 228 picture, shown at the TV's shape
 GAP = 8
 PANE_W, PANE_H = 512, 480       # a grid pane: a look's screen at twice its size
-DIVIDER = (60, 60, 80)
-BACKGROUND = (0, 0, 0)
-LABEL = (235, 235, 245)
+DIVIDER: Rgb = (60, 60, 80)
+BACKGROUND: Rgb = (0, 0, 0)
+LABEL: Rgb = (235, 235, 245)
 
 
-def size(view):
+def size(view: str) -> tuple[int, int]:
     """(width, height) of a view's picture."""
     sizes = {"both": (SCREEN_W + GAP + ORIGINAL_W, SCREEN_H), "remaster": (SCREEN_W, SCREEN_H),
              "2600": (ORIGINAL_W, SCREEN_H), "grid": (2 * PANE_W, 2 * PANE_H)}
     return sizes[view]
 
 
-def compose(view, playing, original, grid_extras=None):
+def compose(view: str, playing: Picture, original: Picture,
+            grid_extras: GridExtras | None = None) -> Picture:
     """The view's picture. playing: your look's screen (with any overlays); original: the 2600's frame;
     grid_extras: (the other look's screen, the RAM pane, the two looks' names) for the grid."""
     if view == "remaster":
@@ -44,15 +49,17 @@ def compose(view, playing, original, grid_extras=None):
     if view == "both":
         gap = np.zeros((SCREEN_H, GAP, 3), np.uint8)
         return np.concatenate([playing, gap, tv_shape(original, ORIGINAL_W, SCREEN_H)], axis=1)
+    assert grid_extras is not None, "the grid needs the other look, the RAM pane and the names"
     return grid(playing, original, *grid_extras)
 
 
-def tv_shape(frame, width, height):
+def tv_shape(frame: Picture, width: int, height: int) -> Picture:
     """The 2600's picture resized to width x height, nearest-neighbour (its pixels are twice as wide)."""
-    return np.array(Image.fromarray(np.asarray(frame)).resize((width, height), Image.NEAREST))
+    return np.array(Image.fromarray(np.asarray(frame)).resize((width, height), Image.Resampling.NEAREST))
 
 
-def grid(playing, original, other, ram_pane, names):
+def grid(playing: Picture, original: Picture, other: Picture, ram_pane: Picture | None,
+         names: tuple[str, str]) -> Picture:
     canvas = np.zeros((2 * PANE_H, 2 * PANE_W, 3), np.uint8)
     double_into(canvas[:PANE_H, :PANE_W], playing)
     double_into(canvas[PANE_H:, :PANE_W], other)
@@ -60,7 +67,8 @@ def grid(playing, original, other, ram_pane, names):
     width, height = int(ORIGINAL_W * scale), int(228 * scale)
     left, top = PANE_W + (PANE_W - width) // 2, (PANE_H - height) // 2
     canvas[top:top + height, left:left + width] = tv_shape(original, width, height)
-    canvas[PANE_H:, PANE_W:] = ram_pane
+    if ram_pane is not None:   # none until the first frame has been read
+        canvas[PANE_H:, PANE_W:] = ram_pane
     playing_name, other_name = names
     for text, x, y in ((f"PLAYING - {playing_name}", 0, 0), (f"COMPARE - {other_name}", 0, PANE_H),
                        ("ATARI 2600 - 1982", PANE_W, 0)):
@@ -70,7 +78,7 @@ def grid(playing, original, other, ram_pane, names):
     return canvas
 
 
-def double_into(pane, picture):
+def double_into(pane: Picture, picture: Picture) -> None:
     """The picture at twice its size, written straight into the pane: each row widened once, then written
     to both of the pane's rows for it."""
     widened = picture.repeat(2, axis=1)
@@ -78,7 +86,7 @@ def double_into(pane, picture):
     pane[1::2] = widened
 
 
-def label(canvas, text, pane_x, pane_y):
+def label(canvas: Picture, text: str, pane_x: int, pane_y: int) -> None:
     """A pane's name at the bottom, in the middle (clear of the looks' game and floor numbers), on a dark
     box."""
     letters, inked = label_picture(text)
@@ -90,7 +98,7 @@ def label(canvas, text, pane_x, pane_y):
 
 
 @lru_cache(maxsize=16)
-def label_picture(text):
+def label_picture(text: str) -> tuple[Picture, Mask]:
     """(the label's letters, where they're inked): drawn once per text - the labels hardly change."""
     width = hud.text_width(text) + 8
     letters = np.zeros((14, width, 3), np.uint8)
@@ -98,7 +106,7 @@ def label_picture(text):
     return letters, letters.any(axis=2)
 
 
-def fit_into(surface, screen):
+def fit_into(surface: pygame.Surface, screen: pygame.Surface) -> None:
     """Paint `surface` into `screen` as big as fits with its shape kept, centred, bars around it: pixel art
     stays sharp when it's made bigger, and is smoothed when it's made smaller."""
     picture_w, picture_h = surface.get_size()

@@ -22,12 +22,20 @@ Usage: python music/chiptune.py [PACK]     -> shots/music/<song>.wav for each of
                                               round, if it loops), to listen to
 """
 
+from __future__ import annotations
+
 import json
 import os
 import sys
 import wave
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:   # only for the type checker: this file also runs as a script, outside the package
+    from shared.types import Floats, Samples
+
+Song = dict[str, Any]   # a song, as a pack's music.json writes it (see above)
 
 RATE = 31440  # the emulator's own sample rate, so music adds straight onto the game's sound
 NOTE = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
@@ -37,7 +45,7 @@ LEVEL = 12000           # a typical NES-music level, under the 2600's sound effe
 JINGLE_RING = 1.5       # seconds a jingle rings on after its last bar
 
 
-def note_hz(name):
+def note_hz(name: str) -> float:
     """'F#4' / 'Bb5' / 'C6' -> Hz (A4 = 440)."""
     letter, rest = name[0], name[1:]
     semitone = NOTE[letter]
@@ -48,7 +56,7 @@ def note_hz(name):
     return midi_hz(midi)
 
 
-def chord_notes(symbol):
+def chord_notes(symbol: str) -> tuple[int, tuple[int, ...]]:
     """'Am' -> (root as a MIDI note in octave 3, intervals); 'Bb' / 'F#m' / 'D#dim' work too."""
     root = symbol[0]
     accidental = symbol[1] if len(symbol) > 1 and symbol[1] in "#b" else ""
@@ -57,12 +65,12 @@ def chord_notes(symbol):
     return 48 + semitone, CHORDS[quality]
 
 
-def midi_hz(midi):
+def midi_hz(midi: float) -> float:
     """A MIDI note number (69 = A4) -> Hz."""
     return 440.0 * 2 ** ((midi - 69) / 12)
 
 
-def pulse(freq, length, duty, vibrato=0.0):
+def pulse(freq: float | Floats, length: int, duty: float, vibrato: float = 0.0) -> Floats:
     """A square-ish wave, high for `duty` of each cycle; vibrato fades in after 0.15 s."""
     seconds = np.arange(length) / RATE
     wobble = vibrato * np.sin(2 * np.pi * 5.5 * seconds) * np.clip((seconds - 0.15) / 0.2, 0, 1)
@@ -70,7 +78,7 @@ def pulse(freq, length, duty, vibrato=0.0):
     return np.where(phase < duty, 1.0, -1.0)
 
 
-def triangle(freq, length):
+def triangle(freq: float | Floats, length: int) -> Floats:
     """The NES triangle: 16 steps up and down."""
     if np.ndim(freq) == 0:
         freq = np.full(length, freq)
@@ -79,7 +87,8 @@ def triangle(freq, length):
     return np.round((wave_shape + 1) * 7.5) / 7.5 - 1
 
 
-def envelope(length, attack=0.004, decay=0.18, sustain=0.55, release=0.03):
+def envelope(length: int, attack: float = 0.004, decay: float = 0.18, sustain: float = 0.55,
+             release: float = 0.03) -> Floats:
     """A note's loudness over time: a rise, a fall to `sustain`, a short fade at the end."""
     seconds = np.arange(length) / RATE
     after_attack = sustain + (1 - sustain) * np.exp(-(seconds - attack) / decay)
@@ -90,7 +99,7 @@ def envelope(length, attack=0.004, decay=0.18, sustain=0.55, release=0.03):
     return loudness
 
 
-def drum(kind, length, rng):
+def drum(kind: str, length: int, rng: np.random.Generator) -> Floats:
     seconds = np.arange(length) / RATE
     if kind == "k":  # the triangle, its pitch dropping fast
         freqs = 55 + 120 * np.exp(-seconds / 0.03)
@@ -106,16 +115,16 @@ def drum(kind, length, rng):
 class Timing:
     """A song's tempo in samples: a sixteenth note, a bar."""
 
-    def __init__(self, song):
-        self.step = 60.0 / song["bpm"] / 4  # a sixteenth note, in seconds
-        self.bar = int(round(16 * self.step * RATE))
+    def __init__(self, song: Song):
+        self.step: float = 60.0 / song["bpm"] / 4  # a sixteenth note, in seconds
+        self.bar: int = int(round(16 * self.step * RATE))
 
-    def at(self, sixteenth):
+    def at(self, sixteenth: float) -> int:
         """A sixteenth-note index -> the sample it starts on."""
         return int(round(sixteenth * self.step * RATE))
 
 
-def render(song):
+def render(song: Song) -> Samples:
     """A song (a dict, as above) -> int16 stereo samples of one pass; a looping song loops cleanly."""
     song = {"drums": "", "style": "march", "loop": True, **song}
     timing = Timing(song)
@@ -138,7 +147,7 @@ def render(song):
     return mix_down(lead, harmony, bass, drums, song["loop"])
 
 
-def add_melody(lead, tokens, timing, length):
+def add_melody(lead: Floats, tokens: list[str], timing: Timing, length: int) -> None:
     """Pulse 1: eighth-note tokens; "-" holds the note before it, "." rests."""
     index = 0
     while index < len(tokens):
@@ -164,7 +173,7 @@ BASS_PATTERNS = {  # style -> (sixteenth, semitones from the root) for each bass
 }
 
 
-def add_bass(bass, style, root, bar_start, timing):
+def add_bass(bass: Floats, style: str, root: int, bar_start: int, timing: Timing) -> None:
     """The triangle: the chord's root an octave down, in the style's pattern."""
     pattern = BASS_PATTERNS.get(style, BASS_PATTERNS["creep"])
     for index, (sixteenth, offset) in enumerate(pattern):
@@ -175,7 +184,7 @@ def add_bass(bass, style, root, bar_start, timing):
         bass[start:end] += note * envelope(end - start, decay=0.5, sustain=0.85, release=0.01)
 
 
-def add_harmony(harmony, style, tones, bar_start, timing):
+def add_harmony(harmony: Floats, style: str, tones: list[int], bar_start: int, timing: Timing) -> None:
     """Pulse 2, by style."""
     if style in ("anthem", "drive", "fanfare"):
         arpeggio(harmony, tones, bar_start, timing)
@@ -189,7 +198,7 @@ def add_harmony(harmony, style, tones, bar_start, timing):
         broken_chord(harmony, tones, bar_start, timing)
 
 
-def arpeggio(harmony, tones, bar_start, timing):
+def arpeggio(harmony: Floats, tones: list[int], bar_start: int, timing: Timing) -> None:
     """Sixteenth notes up the chord and on, an octave up."""
     sequence = tones + [tones[0] + 12, tones[1] + 12]
     for sixteenth in range(16):
@@ -199,7 +208,7 @@ def arpeggio(harmony, tones, bar_start, timing):
         harmony[start:end] += note * envelope(end - start, decay=0.05, sustain=0.3, release=0.005)
 
 
-def stabs(harmony, tones, bar_start, timing):
+def stabs(harmony: Floats, tones: list[int], bar_start: int, timing: Timing) -> None:
     """Short chords on the off-beats."""
     for sixteenth in (2, 6, 10, 14):
         start, end = bar_start + timing.at(sixteenth), bar_start + timing.at(sixteenth + 1)
@@ -208,7 +217,7 @@ def stabs(harmony, tones, bar_start, timing):
             harmony[start:end] += note * envelope(end - start, decay=0.04, sustain=0.2, release=0.005) * 0.5
 
 
-def held_chord(harmony, tones, bar_start, timing):
+def held_chord(harmony: Floats, tones: list[int], bar_start: int, timing: Timing) -> None:
     """The whole chord, held all bar like an organ: a slow swell, half-duty pulses."""
     start, end = bar_start, bar_start + timing.bar - int(0.02 * RATE)
     for midi in tones:
@@ -216,7 +225,7 @@ def held_chord(harmony, tones, bar_start, timing):
         harmony[start:end] += note * envelope(end - start, attack=0.06, decay=0.8, sustain=0.8) * 0.4
 
 
-def shiver(harmony, tones, bar_start, timing):
+def shiver(harmony: Floats, tones: list[int], bar_start: int, timing: Timing) -> None:
     """Sixteenths between the root and the note a semitone above: dread."""
     root = tones[0] + 12
     for sixteenth in range(16):
@@ -226,7 +235,7 @@ def shiver(harmony, tones, bar_start, timing):
         harmony[start:end] += note * envelope(end - start, decay=0.04, sustain=0.35, release=0.005)
 
 
-def broken_chord(harmony, tones, bar_start, timing):
+def broken_chord(harmony: Floats, tones: list[int], bar_start: int, timing: Timing) -> None:
     """The chord one note at a time, in eighths."""
     for sixteenth in range(0, 16, 2):
         midi = tones[(sixteenth // 2) % len(tones)] + 12
@@ -235,7 +244,7 @@ def broken_chord(harmony, tones, bar_start, timing):
         harmony[start:end] += note * envelope(end - start, decay=0.12, sustain=0.25)
 
 
-def add_drums(drums, pattern, bar_start, timing, rng):
+def add_drums(drums: Floats, pattern: str, bar_start: int, timing: Timing, rng: np.random.Generator) -> None:
     """One bar of the drum pattern."""
     for sixteenth, kind in enumerate(pattern):
         if kind == ".":
@@ -245,7 +254,7 @@ def add_drums(drums, pattern, bar_start, timing, rng):
         drums[start:start + length] += drum(kind, length, rng)
 
 
-def mix_down(lead, harmony, bass, drums, loop):
+def mix_down(lead: Floats, harmony: Floats, bass: Floats, drums: Floats, loop: bool) -> Samples:
     """The four voices -> int16 stereo, pulse 2 a touch to the right; faded so it loops (or ends) cleanly."""
     left = 0.24 * lead + 0.09 * harmony + 0.30 * bass + 0.16 * drums
     right = 0.24 * lead + 0.11 * harmony + 0.30 * bass + 0.16 * drums
@@ -259,7 +268,7 @@ def mix_down(lead, harmony, bass, drums, loop):
     return pcm.astype(np.int16)
 
 
-def load_songs(pack_folder):
+def load_songs(pack_folder: str) -> dict[str, Song]:
     """A pack's soundtrack (its music.json: {"songs": {moment: song}}), or {} if it has none."""
     path = os.path.join(pack_folder, "music.json")
     if not os.path.isfile(path):
@@ -268,7 +277,7 @@ def load_songs(pack_folder):
         return json.load(music_file)["songs"]
 
 
-def main():
+def main() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     pack = sys.argv[1] if len(sys.argv) > 1 else "classic"
     out = os.path.join(root, "shots", "music")

@@ -33,16 +33,16 @@ WAYS = [   # (what it should say, piece 1's (floor, room), the lines) - you star
     ("the nearest piece two floors up: up the stairs", (2, 1),
      ["3 PIECES LEFT. THE NEAREST IS", "UP THE STAIRS, 2 FLOORS."]),
 ]
-failures = []
+failures: list[str] = []
 
 
-def check(claim, passed, detail=""):
+def check(claim: str, passed: bool, detail: object = "") -> None:
     print(f"{'PASS' if passed else 'FAIL'}  {claim}" + (f"   [{detail}]" if detail else ""))
     if not passed:
         failures.append(claim)
 
 
-def start_game(lab, number):
+def start_game(lab: Lab, number: int) -> None:
     while lab.peek(M.GAME_NUMBER) != number - 1:
         lab.hold(SELECT, frames=2)
         lab.run(2)
@@ -50,7 +50,7 @@ def start_game(lab, number):
     lab.run(30)
 
 
-def put(lab, rom, item, floor, room):
+def put(lab: Lab, rom: bytes, item: int, floor: int, room: int) -> None:
     """An item in the middle of a room (test setup: the lab writes RAM; the game never does)."""
     x, y = R.room_centre(rom, room)
     lab.poke(M.ITEM_FLOOR + item, floor)
@@ -58,19 +58,19 @@ def put(lab, rom, item, floor, room):
     lab.poke(M.ITEM_Y + item, y)
 
 
-def hold_whole_urn(lab):
+def hold_whole_urn(lab: Lab) -> None:
     lab.poke(M.CARRIED, 2)
     for offset, shape in enumerate((8, 0xFF, 0xFF)):
         lab.poke(M.URN_SHAPES + offset, shape)
 
 
-def fits(lines):
+def fits(lines: list[str]) -> list[str]:
     too_long = [line for line in lines if len(line) > SCREEN_CHARACTERS]
     unknown = sorted({letter for line in lines for letter in line if letter not in GLYPHS})
     return too_long + unknown
 
 
-def check_every_game(lab, game):
+def check_every_game(lab: Lab, game: Game) -> None:
     for number in range(1, 10):
         start_game(lab, number)
         problems = fits(hints.hint(game.state(lab.ram), game.rom))
@@ -79,7 +79,7 @@ def check_every_game(lab, game):
     check("the whole-urn note fits the screen and the font", not problems, ", ".join(problems))
 
 
-def check_ways(lab, game):
+def check_ways(lab: Lab, game: Game) -> None:
     start_game(lab, 1)
     for claim, first, expected in WAYS:
         for piece, (floor, room) in zip(URN_PIECES, [first] + SOMEWHERE_ELSE):
@@ -90,7 +90,7 @@ def check_ways(lab, game):
         check(f"{claim} - and the same again", again == said)
 
 
-def check_get_out(lab, game):
+def check_get_out(lab: Lab, game: Game) -> None:
     start_game(lab, 1)
     before = game.state(lab.ram)
     hold_whole_urn(lab)
@@ -105,7 +105,7 @@ def check_get_out(lab, game):
     check("whole urn, two floors up: down the stairs", down, " / ".join(said))
 
 
-def main():
+def main() -> int:
     lab, game = Lab(), Game()
     check_every_game(lab, game)
     check_ways(lab, game)

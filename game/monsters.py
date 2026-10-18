@@ -24,6 +24,7 @@ The rules, in short (docs/monsters.md has the long version):
 
 from game import ram_map as M
 from game import rom as R
+from shared.types import Point
 
 GHOST, BAT = 0, 1
 WANDER_FRAMES = 0x88        # the frames (of 8) on which a wandering monster takes a step: 3 and 7
@@ -36,25 +37,25 @@ WALL, EDGE = 0xFF, 0x80
 RANDOM_LOW, RANDOM_HIGH = 0xEB, 0xEC
 
 
-def bit(number):
+def bit(number: int) -> int:
     return 1 << number
 
 
 class State:
     """The 128 bytes of RAM as a bytearray, read and written by $80-$FF address."""
 
-    def __init__(self, ram):
-        self.ram = bytearray(ram)
+    def __init__(self, ram: bytes):
+        self.ram: bytearray = bytearray(ram)
 
-    def __getitem__(self, address):
+    def __getitem__(self, address: int) -> int:
         return self.ram[address - 0x80]
 
-    def __setitem__(self, address, value):
+    def __setitem__(self, address: int, value: int) -> None:
         self.ram[address - 0x80] = value & 0xFF
 
 
 # --- the random number generator ($F4C9) ------------------------------------------------------------
-def next_random(state):
+def next_random(state: State) -> int:
     """Stir $EB/$EC (a 16-bit shift register fed by the XOR of two bits); return the new $EB."""
     mixed = state[RANDOM_HIGH] ^ state[RANDOM_LOW]
     carry_in = mixed >> 6 & 1          # ASL ASL leaves bit 6 in the carry
@@ -65,7 +66,7 @@ def next_random(state):
 
 
 # --- one frame of monster movement ($F8EC) -----------------------------------------------------------
-def move_monsters(state, rom):
+def move_monsters(state: State, rom: bytes) -> None:
     """Everything the game does for the monsters in one frame of play (not while the player dies)."""
     phase = state[M.CLOCK] & 7
     wander_step = WANDER_FRAMES & bit(phase)
@@ -77,17 +78,17 @@ def move_monsters(state, rom):
     handle_one_arrival(state, rom)
 
 
-def in_players_room(state, monster):
+def in_players_room(state: State, monster: int) -> bool:
     if state[M.MONSTER_FLOOR + monster] != state[M.FLOOR]:
         return False
     return state[M.MONSTER_ROOM + monster] in (state[M.ROOM], state[0x97])
 
 
-def ignores_scepter(state, monster):
+def ignores_scepter(state: State, monster: int) -> bool:
     return monster == GHOST and state[M.GAME_NUMBER] >= FAST_FROM_GAME
 
 
-def choose_target(state, rom, monster, phase, wander_step):
+def choose_target(state: State, rom: bytes, monster: int, phase: int, wander_step: int) -> Point | None:
     """Where the monster steps towards this frame, or None if it stands still."""
     if in_players_room(state, monster):
         state[M.MONSTERS_HERE] += 1
@@ -107,13 +108,13 @@ def choose_target(state, rom, monster, phase, wander_step):
     return route_point(state, rom, monster)
 
 
-def chase_step(state, rom, monster, phase):
+def chase_step(state: State, rom: bytes, monster: int, phase: int) -> bool:
     """Does a chasing monster step on this frame? ($FA6F)"""
     speeds = "MONSTER_SPEED_FAST" if state[M.GAME_NUMBER] >= FAST_FROM_GAME else "MONSTER_SPEED"
     return R.table(rom, speeds)[monster] & bit(phase) != 0
 
 
-def chase_point(state, rom, monster):
+def chase_point(state: State, rom: bytes, monster: int) -> Point:
     """The point near the player a chasing monster heads for. The offsets look meant to be signed (-6, -2,
     +6), but the game subtracts them as plain bytes and falls back to the player's own x or y whenever
     that borrows - so $FA and $FE always come out as 0."""
@@ -126,13 +127,13 @@ def chase_point(state, rom, monster):
     return x, y
 
 
-def waypoint(rom, route):
+def waypoint(rom: bytes, route: int) -> Point:
     kind = (route & 0x3F) >> 4
     index = R.table(rom, "WAYPOINT_START")[kind] + (route & 0x0F)
     return R.table(rom, "WAYPOINT_X")[index], R.table(rom, "WAYPOINT_Y")[index]
 
 
-def route_point(state, rom, monster):
+def route_point(state: State, rom: bytes, monster: int) -> Point | None:
     """The waypoint of the monster's plan; if it's already there, mark it arrived and stand still."""
     target = waypoint(rom, state[M.MONSTER_ROUTE + monster])
     here = state[M.MONSTER_X + monster], state[M.MONSTER_Y + monster]
@@ -142,7 +143,7 @@ def route_point(state, rom, monster):
     return target
 
 
-def step_towards(state, monster, target):
+def step_towards(state: State, monster: int, target: Point) -> None:
     """One unit towards the target in x and in y at once ($F983). A step left that would reach x = 0 is
     undone by the code's shape - harmless, as no waypoint is that far left."""
     x, y = state[M.MONSTER_X + monster], state[M.MONSTER_Y + monster]
@@ -161,7 +162,7 @@ def step_towards(state, monster, target):
 
 
 # --- arriving at a waypoint ($F9A6) ------------------------------------------------------------------
-def handle_one_arrival(state, rom):
+def handle_one_arrival(state: State, rom: bytes) -> None:
     """Only the lowest-numbered arrived monster gets a new plan this frame; the others wait their turn."""
     for monster in range(state[M.LAST_MONSTER] + 1):
         if state[0x95] & bit(monster):
@@ -170,7 +171,7 @@ def handle_one_arrival(state, rom):
             return
 
 
-def new_plan(state, rom, monster):
+def new_plan(state: State, rom: bytes, monster: int) -> None:
     route = state[M.MONSTER_ROUTE + monster]
     kind = (route & 0x30) >> 4
     direction_bits = route & 0xC0
@@ -188,7 +189,7 @@ def new_plan(state, rom, monster):
         state[M.MONSTER_ROUTE + monster] = room | direction_bits ^ 0x40
 
 
-def pick_direction(state, rom, monster):
+def pick_direction(state: State, rom: bytes, monster: int) -> None:
     """At a room centre: try directions in turn from a random one, skipping the way it came; if none will
     do, go back the way it came ($F9F3)."""
     came_from = state[M.MONSTER_ROUTE + monster] >> 6 ^ 1
@@ -203,11 +204,11 @@ def pick_direction(state, rom, monster):
             return
 
 
-def floor_index(state, floor):
+def floor_index(state: State, floor: int) -> int:
     return floor + 4 if state[M.GAME_NUMBER] == R.GAME_9 else floor
 
 
-def try_direction(state, rom, monster, direction):
+def try_direction(state: State, rom: bytes, monster: int, direction: int) -> bool:
     """Set a plan to leave the room this way, if the monster may; return whether it did ($FA1F)."""
     room = state[M.MONSTER_ROOM + monster]
     floor = state[M.MONSTER_FLOOR + monster]
@@ -228,18 +229,18 @@ def try_direction(state, rom, monster, direction):
     return True
 
 
-def door_locked(state, rom, floor, door):
+def door_locked(state: State, rom: bytes, floor: int, door: int) -> bool:
     if state[M.GAME_NUMBER] < LOCKS_FROM_GAME:
         return False
     return R.table(rom, "LOCKED_DOORS")[floor_index(state, floor)] & bit(door) != 0
 
 
-def may_pass_locks(state, monster):
+def may_pass_locks(state: State, monster: int) -> bool:
     return monster == GHOST or state[M.GAME_NUMBER] == R.GAME_9
 
 
 # --- following the player (games 6-9) ----------------------------------------------------------------
-def follow_through_door(state, rom, room, direction):
+def follow_through_door(state: State, rom: bytes, room: int, direction: int) -> None:
     """The player just went through a door out of `room`: monsters there follow ($FCD8). Through a locked
     door only the ghost follows."""
     if state[M.GAME_NUMBER] < FOLLOW_FROM_GAME:
@@ -250,7 +251,7 @@ def follow_through_door(state, rom, room, direction):
     send_followers(state, room, plan, followers)
 
 
-def follow_up_stairs(state, room, stairs_byte):
+def follow_up_stairs(state: State, room: int, stairs_byte: int) -> None:
     """The player just took the stairs out of `room`: monsters there follow ($FB2B). stairs_byte is $9B."""
     if state[M.GAME_NUMBER] < FOLLOW_FROM_GAME:
         return
@@ -260,7 +261,7 @@ def follow_up_stairs(state, room, stairs_byte):
     send_followers(state, room, plan, None)
 
 
-def send_followers(state, room, plan, only):
+def send_followers(state: State, room: int, plan: int, only: list[int] | None) -> None:
     """Give every monster in the player's floor and `room` the plan, and mark them chasing ($FB47)."""
     state[0x94] = 0
     candidates = only if only is not None else range(state[M.LAST_MONSTER], -1, -1)
@@ -272,7 +273,7 @@ def send_followers(state, room, plan, only):
 
 
 # --- scattering ($F0E7) ------------------------------------------------------------------------------
-def scatter(state, rom):
+def scatter(state: State, rom: bytes) -> None:
     """Put all five monsters at random room centres on random floors - never in the player's room."""
     base = next_random(state) & 7
     while base >= R.ROOM_COUNT:
@@ -294,7 +295,7 @@ GAME_3 = 2
 GAME_3_KEY = (0, 0x74, 0x84)  # in game 3 the master key starts beside the player
 
 
-def new_game(state, rom):
+def new_game(state: State, rom: bytes) -> None:
     """What RESET does to the monsters and items: stir the random numbers by swapping their bytes, scatter
     the monsters (the player is in room 2 of the first floor), send the ghost to the top floor, then put
     each item where the monster with the same number starts."""

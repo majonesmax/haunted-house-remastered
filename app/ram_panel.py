@@ -16,8 +16,9 @@ import pygame
 
 from app.fonts import mono
 from game import ram_map as M
-from game.state import MONSTER_KINDS
+from game.state import MONSTER_KINDS, GameState
 from music.events import EventWatcher
+from shared.types import Floats, Picture, Rgb
 
 SIZE = (512, 480)
 BACKGROUND, GREEN, DIM, HOT = (4, 10, 6), (90, 230, 130), (40, 96, 56), (255, 255, 190)
@@ -39,25 +40,27 @@ EVENT_WORDS = {"match_strike": "match lit", "match_out": "match out", "door_open
                "drop": "put something down", "urn_join": "urn pieces joined", "urn_whole": "THE URN IS WHOLE",
                "caught": "CAUGHT", "thunder": "lightning", "monster_ghost": "the ghost is here",
                "monster_bat": "the bat is here", "monster_tarantula": "a tarantula is here"}
-MODE_WORDS = {"playing": "game started", "dying": None, "select": "back to game select", "won": "YOU ESCAPED"}
+MODE_WORDS: dict[str, str | None] = {"playing": "game started", "dying": None,
+                                     "select": "back to game select", "won": "YOU ESCAPED"}
 
 
 class RamPanel:
-    def __init__(self):
+    def __init__(self) -> None:
         pygame.font.init()
         self.font, self.bold = mono(12), mono(13, bold=True)
         self.small = mono(11)
-        self.heat = np.zeros(128)
-        self.change_rate = np.zeros(128)  # the share of recent frames each byte changed on
-        self.previous = None
-        self.spotlight = None              # the last interesting byte to change
-        self.events = deque(maxlen=EVENT_LINES)
+        self.heat: Floats = np.zeros(128)
+        self.change_rate: Floats = np.zeros(128)  # the share of recent frames each byte changed on
+        self.previous: np.ndarray | None = None
+        self.spotlight: int | None = None          # the last interesting byte to change
+        self.events: deque[str] = deque(maxlen=EVENT_LINES)
         self.watcher = EventWatcher()
-        self.mode = None
-        self.drawn, self.draws = None, 0   # the pane as last drawn, and how many times it's been asked for
+        self.mode: str | None = None
+        self.drawn: Picture | None = None          # the pane as last drawn...
+        self.draws = 0                             # ...and how many times it's been asked for
 
     # --- following the game ---
-    def update(self, state, frame_no):
+    def update(self, state: GameState, frame_no: int) -> None:
         """Once a game frame: what changed, and what happened."""
         ram = np.frombuffer(bytes(state.ram), np.uint8).copy()
         self.heat = np.maximum(self.heat - 1, 0)
@@ -72,24 +75,25 @@ class RamPanel:
         self.previous = ram
         for name in self.watcher.update(state):
             if name != "footstep":
-                self.log(frame_no, EVENT_WORDS.get(name, name))
-        if state.mode != self.mode and MODE_WORDS.get(state.mode):
-            self.log(frame_no, MODE_WORDS[state.mode] if self.mode else f"game {state.game}")
+                self.log(frame_no, EVENT_WORDS.get(name, str(name)))
+        words = MODE_WORDS.get(state.mode)
+        if state.mode != self.mode and words:
+            self.log(frame_no, words if self.mode else f"game {state.game}")
         self.mode = state.mode
 
-    def log(self, frame_no, text):
+    def log(self, frame_no: int, text: str) -> None:
         seconds = frame_no / 60
         self.events.append(f"{int(seconds // 60)}:{seconds % 60:04.1f}  {text}")
 
     # --- drawing ---
-    def draw(self, state):
+    def draw(self, state: GameState) -> Picture:
         """The pane as an RGB array, SIZE: redrawn every DRAW_EVERY times it's asked for."""
         self.draws += 1
         if self.drawn is None or self.draws % DRAW_EVERY == 0:
             self.drawn = self.draw_now(state)
         return self.drawn
 
-    def draw_now(self, state):
+    def draw_now(self, state: GameState) -> Picture:
         surface = pygame.Surface(SIZE)
         surface.fill(BACKGROUND)
         y = self.text(surface, "INTERNALS - THE GAME'S 128 BYTES OF RAM", 12, 8, AMBER, self.bold)
@@ -99,12 +103,13 @@ class RamPanel:
         self.draw_events(surface, y + 8)
         return pygame.surfarray.array3d(surface).swapaxes(0, 1)
 
-    def text(self, surface, words, x, y, colour, font=None):
+    def text(self, surface: pygame.Surface, words: str, x: int, y: int, colour: Rgb,
+             font: pygame.font.Font | None = None) -> int:
         font = font or self.font
         surface.blit(font.render(words, True, colour), (x, y))
         return y + font.get_linesize()
 
-    def draw_bytes(self, surface, ram, top):
+    def draw_bytes(self, surface: pygame.Surface, ram: bytes, top: int) -> int:
         """$80-$FF, 16 bytes a row, each coloured by how lately it changed."""
         step = self.font.size("00 ")[0]
         for row in range(8):
@@ -117,12 +122,13 @@ class RamPanel:
                              (52 + column * step, y))
         return top + 8 * self.font.get_linesize()
 
-    def byte_colour(self, index, value):
+    def byte_colour(self, index: int, value: int) -> Rgb:
         heat = self.heat[index] / COOL
         resting = GREEN if value else DIM
-        return tuple(int(rest + (hot - rest) * heat) for rest, hot in zip(resting, HOT))
+        red, green, blue = (int(rest + (hot - rest) * heat) for rest, hot in zip(resting, HOT))
+        return red, green, blue
 
-    def draw_spotlight(self, surface, y):
+    def draw_spotlight(self, surface: pygame.Surface, y: int) -> int:
         """The byte that changed last (bar the busy ones): what it is."""
         if self.spotlight is None:
             return self.text(surface, "Play, and the bytes that change are named here.", 12, y, GREY)
@@ -132,7 +138,7 @@ class RamPanel:
             y = self.text(surface, line, 12, y, PALE, self.small)
         return y
 
-    def draw_decoded(self, surface, state, y):
+    def draw_decoded(self, surface: pygame.Surface, state: GameState, y: int) -> int:
         held = "nothing" if state.carried is None else ITEMS[state.carried].lower()
         urn = " ".join(URN_SHAPES.get(item.shape, "?") for item in state.items[2:])
         lit = f"lit, {state.match_seconds}s left" if state.match_lit else "out"
@@ -152,15 +158,16 @@ class RamPanel:
             y = self.text(surface, line, 12, y, AMBER if here else GREY, self.small)
         return y
 
-    def draw_events(self, surface, y):
+    def draw_events(self, surface: pygame.Surface, y: int) -> None:
         y = self.text(surface, "WHAT HAPPENED", 12, y, AMBER, self.bold)
         for line in self.events:
             y = self.text(surface, line, 12, y, PALE, self.small)
 
 
-def wrapped(text, width):
+def wrapped(text: str, width: int) -> list[str]:
     """Words in lines of at most `width` characters."""
-    lines, line = [], ""
+    lines: list[str] = []
+    line = ""
     for word in text.split():
         if line and len(line) + 1 + len(word) > width:
             lines.append(line)

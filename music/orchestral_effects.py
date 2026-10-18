@@ -14,24 +14,28 @@ from music import house
 from music.ambience import one_off_pcm
 from music.chiptune import RATE, midi_hz
 from music.effects import QUIET, decay, place, seconds
-from music.orchestra import bell, harp, harpsichord, hall, organ, strings, timpani, violin
+from music.orchestra import Pitch, bell, harp, harpsichord, hall, organ, strings, timpani, violin
+from shared.types import Floats, Instrument, Samples
 
 LEVEL = 6400            # each effect's loudness while it sounds: a little under the NES's square waves
 
 
-def notes(midis, gap, voice, ring=0.6):
+def notes(midis: list[int], gap: float, voice: Instrument, ring: float = 0.6) -> Floats:
     """A run of notes `gap` seconds apart on one instrument, each ringing `ring` seconds."""
     length = seconds(ring)
     return place([(index * gap, voice(midi_hz(midi), length)) for index, midi in enumerate(midis)],
                   gap * len(midis) + ring)
 
 
-def chord(midis, length_seconds, voice):
+def chord(midis: list[int], length_seconds: float, voice: Instrument) -> Floats:
     length = seconds(length_seconds)
-    return sum(voice(midi_hz(midi), length) for midi in midis) / len(midis)
+    together: Floats = np.zeros(length)
+    for midi in midis:
+        together = together + voice(midi_hz(midi), length)
+    return together / len(midis)
 
 
-def scrape(seed, length_seconds, low_hz, high_hz, time_constant):
+def scrape(seed: int, length_seconds: float, low_hz: float, high_hz: float, time_constant: float) -> Floats:
     """A burst of filtered noise dying away: a scratch, a puff, a rattle."""
     length = seconds(length_seconds)
     burst = house.filtered(house.noise(length, seed)[:, :1], low_hz, high_hz)[:, 0]
@@ -39,7 +43,7 @@ def scrape(seed, length_seconds, low_hz, high_hz, time_constant):
 
 
 # --- the effects ---------------------------------------------------------------------------------------
-def match_strike():
+def match_strike() -> Floats:
     """The head scraping the box, then the flame catching with a soft roar."""
     scratch = scrape(1, 0.09, 1500, 7000, 0.03)
     flare_length = seconds(0.4)
@@ -48,34 +52,34 @@ def match_strike():
     return place([(0, scratch), (0.07, flare * 0.7)], 0.5)
 
 
-def match_out():
+def match_out() -> Floats:
     """Blown out: a breath."""
     return scrape(3, 0.3, 300, 1800, 0.08) * 0.7
 
 
-def door_open():
+def door_open() -> Floats:
     """Old hinges: a slow creak."""
     return house.creak(4, 0.55, 140) * 0.6
 
 
-def door_close():
+def door_close() -> Floats:
     """The door swinging to behind you: a wooden knock with the hall's ring."""
     return house.wood(5, 110, 0.04)
 
 
-def locked():
+def locked() -> Floats:
     """The handle rattles; a low string says no."""
     rattles = [(index * 0.07, scrape(6 + index, 0.03, 900, 4000, 0.01)) for index in range(3)]
     refusal = notes([38, 37], 0.14, lambda freq, length: strings(freq, length, attack=0.02), ring=0.3)
     return place(rattles + [(0.22, refusal * 0.7)], 0.8)
 
 
-def bump():
+def bump() -> Floats:
     """Walking into a wall."""
     return house.wood(7, 80, 0.03) * 0.8
 
 
-def stairs(going_up):
+def stairs(going_up: bool) -> Floats:
     """Steps, each a soft footfall and a harp note, climbing - or going down - the scale."""
     scale = [57, 60, 62, 64, 67, 69] if going_up else [69, 67, 64, 62, 60, 57]
     parts = []
@@ -85,41 +89,41 @@ def stairs(going_up):
     return place(parts, 1.1)
 
 
-def pickup_key():
+def pickup_key() -> Floats:
     """Bells: a small, bright jingle."""
     return notes([84, 88, 84, 88], 0.06, bell, ring=0.5) * 0.7
 
 
-def pickup_scepter():
+def pickup_scepter() -> Floats:
     """A harp sweeping up a major chord, a bell on top."""
     sweep = notes([60, 64, 67, 72, 76, 79], 0.04, harp, ring=0.7)
     return place([(0, sweep), (0.24, bell(midi_hz(84), seconds(1.0)) * 0.5)], 1.3)
 
 
-def pickup_urn():
+def pickup_urn() -> Floats:
     """A low harp chord, broken, under strings."""
     broken = notes([48, 55, 60, 64], 0.07, harp, ring=0.9)
     return place([(0, broken), (0.05, chord([48, 55, 64], 1.0, strings) * 0.4)], 1.3)
 
 
-def drop():
+def drop() -> Floats:
     """Setting something down: a low harp note."""
     return harp(midi_hz(43), seconds(0.4)) * 0.8
 
 
-def urn_join():
+def urn_join() -> Floats:
     """Two pieces join: a harp glissando, up."""
     return notes([67, 69, 71, 74, 76, 79, 81, 83, 86, 88, 91], 0.03, harp, ring=0.8)
 
 
-def urn_whole():
+def urn_whole() -> Floats:
     """The urn is whole: the glissando, then strings and a bell ringing out."""
     glissando = notes([67, 69, 71, 74, 76, 79, 81, 83, 86, 88, 91, 95], 0.03, harp, ring=0.8)
     swell = chord([55, 67, 71, 74], 1.6, strings) * 0.6
     return place([(0, glissando), (0.3, swell), (0.36, bell(midi_hz(91), seconds(1.4)) * 0.4)], 2.0)
 
 
-def caught():
+def caught() -> Floats:
     """Caught: a stab of clashing strings and a timpani hit, sliding away."""
     stab = chord([50, 51, 56, 57], 0.7, violin) * 0.8
     hit = timpani(seconds(0.9))
@@ -128,15 +132,17 @@ def caught():
     return place([(0, stab), (0, hit), (0.15, fall * 0.4)], 1.1)
 
 
-def thunder():
+def thunder() -> Floats:
     """A crack and a roll: timpani under the storm's own rumble."""
     crack = scrape(30, 0.12, 400, 5000, 0.03)
-    roll = sum(np.roll(timpani(seconds(1.6)), seconds(0.08) * hit) * (0.8 ** hit) for hit in range(5))
+    roll: Floats = np.zeros(seconds(1.6))
+    for hit in range(5):
+        roll = roll + np.roll(timpani(seconds(1.6)), seconds(0.08) * hit) * (0.8 ** hit)
     rumble = house.thunder(31)[:seconds(1.8), 0]
     return place([(0, crack * 0.6), (0.02, roll * 0.5), (0.02, rumble)], 1.9)
 
 
-def ghost():
+def ghost() -> Floats:
     """Oooo: an organ chord that swells and sinks a semitone."""
     length = seconds(1.1)
     rising = np.minimum(1, np.arange(length) / seconds(0.4))
@@ -145,22 +151,22 @@ def ghost():
     return np.concatenate([first, second])[:length] * rising * 0.8
 
 
-def bat():
+def bat() -> Floats:
     """Wings: a flurry on the harpsichord, high."""
     return notes([84, 81, 84, 81, 84, 81], 0.045, harpsichord, ring=0.15) * 0.7
 
 
-def tarantula():
+def tarantula() -> Floats:
     """Legs: low strings plucked, scurrying."""
     return notes([40, 41, 40, 43, 41, 40, 41, 43, 44], 0.04, plucked, ring=0.12)
 
 
-def plucked(freq, length):
+def plucked(freq: Pitch, length: int) -> Floats:
     """Pizzicato: a string plucked, dying at once."""
     return strings(freq, length, attack=0.003) * decay(length, 0.04)
 
 
-def footstep():
+def footstep() -> Floats:
     """One step on old boards, quiet."""
     return house.wood(40, 120, 0.02)
 
@@ -173,19 +179,19 @@ EFFECTS = {"match_strike": match_strike, "match_out": match_out, "door_open": do
            "monster_ghost": ghost, "monster_bat": bat, "monster_tarantula": tarantula, "footstep": footstep}
 
 
-def render_all():
+def render_all() -> dict[str, Samples]:
     """Every effect, in the hall, at LEVEL (footsteps quieter)."""
     return {name: one_off_pcm(in_the_hall(make()), LEVEL * (QUIET if name == "footstep" else 1))
             for name, make in EFFECTS.items()}
 
 
-def in_the_hall(track):
+def in_the_hall(track: Floats) -> Floats:
     """The orchestra's hall, with room for the echoes to ring out."""
     ringing = np.concatenate([track, np.zeros(seconds(0.3))])
     return hall(ringing[:, None])[:, 0]
 
 
-def main():
+def main() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = os.path.join(root, "shots", "effects")
     os.makedirs(out, exist_ok=True)

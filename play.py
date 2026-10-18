@@ -26,7 +26,7 @@ import looks
 from game import paths
 
 
-def options():
+def options() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Atari 2600 Haunted House, remastered live.")
     parser.add_argument("rom", nargs="?", help="your Haunted House ROM (else it's found, or asked for)")
     parser.add_argument("--look", default="nes", choices=sorted(looks.LOOKS), help="the look to start in")
@@ -42,7 +42,7 @@ def options():
     return args
 
 
-def main():
+def main() -> int:
     args = options()
     from app.rom import find_rom
     rom = find_rom(args.rom)

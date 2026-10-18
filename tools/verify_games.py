@@ -20,6 +20,7 @@ Usage: python tools/verify_games.py        (prints a table of rules by game; exi
 
 import os
 import sys
+from typing import Callable, Iterable
 
 import numpy as np
 
@@ -44,28 +45,28 @@ WALK_LIMIT = 200
 
 rom = R.load()
 palette = ntsc_palette()
-results = {}                   # rule -> {game: (as expected?, detail)}
+results: dict[str, dict[int, tuple[bool, str]]] = {}   # rule -> {game: (as expected?, detail)}
 
 
-def record(rule, game, expected, actual, detail=""):
+def record(rule: str, game: int, expected: object, actual: object, detail: str = "") -> None:
     results.setdefault(rule, {})[game] = (expected == actual, f"expected {expected}, got {actual} {detail}")
 
 
 # --- scene helpers -----------------------------------------------------------------------------------
-def park_monsters(lab, keep=()):
+def park_monsters(lab: Lab, keep: Iterable[int] = ()) -> None:
     far_floor = (lab.peek(M.FLOOR) + 2) & 3
     for monster in range(5):
         if monster not in keep:
             lab.poke(M.MONSTER_FLOOR + monster, far_floor)
 
 
-def run(lab, frames=1, held=(), keep=()):
+def run(lab: Lab, frames: int = 1, held: Iterable[int] = (), keep: Iterable[int] = ()) -> None:
     for _ in range(frames):
         park_monsters(lab, keep)
         lab.run(1, held)
 
 
-def walk_until(lab, direction, test, limit=WALK_LIMIT):
+def walk_until(lab: Lab, direction: str, test: Callable[[Lab], bool], limit: int = WALK_LIMIT) -> bool:
     for _ in range(limit):
         if test(lab):
             return True
@@ -73,7 +74,7 @@ def walk_until(lab, direction, test, limit=WALK_LIMIT):
     return test(lab)
 
 
-def place_player(lab, floor, room, carried=M.NOTHING):
+def place_player(lab: Lab, floor: int, room: int, carried: int = M.NOTHING) -> None:
     """Put the player at a room's centre (a poke, for setting the scene)."""
     lab.poke(M.FLOOR, floor)
     lab.poke(M.ROOM, room)
@@ -86,11 +87,11 @@ def place_player(lab, floor, room, carried=M.NOTHING):
     run(lab, 2)
 
 
-def light_match(lab):
+def light_match(lab: Lab) -> None:
     run(lab, 2, [BUTTON])
 
 
-def choose_game(lab, game):
+def choose_game(lab: Lab, game: int) -> bytes:
     while lab.peek(M.GAME_NUMBER) != game:
         lab.hold(SELECT, frames=2)
         lab.run(2)
@@ -100,13 +101,13 @@ def choose_game(lab, game):
 
 
 # --- the rules ---------------------------------------------------------------------------------------
-def wall_pixels(lab):
+def wall_pixels(lab: Lab) -> int:
     wall_rgb = np.array(rgb_for(palette, colour_number(rom, 8 + lab.peek(M.FLOOR))))
     play_area = lab.picture()[:PLAY_AREA_ROWS]
     return int((play_area == wall_rgb).all(axis=2).sum())
 
 
-def check_walls(lab, game):
+def check_walls(lab: Lab, game: int) -> None:
     run(lab, 2)
     dark = wall_pixels(lab)
     light_match(lab)
@@ -118,7 +119,7 @@ def check_walls(lab, game):
     record("walls seen with a match lit", game, game == 0, lit > WALL_PIXELS, f"({lit} px)")
 
 
-def door_passes(lab, start, floor, door, carried):
+def door_passes(lab: Lab, start: bytes, floor: int, door: int, carried: int) -> bool:
     """Walk from the door's first room towards the second; does the player get through?"""
     lab.load(start)
     first, second = R.doors(rom)[door]
@@ -127,8 +128,9 @@ def door_passes(lab, start, floor, door, carried):
     return walk_until(lab, direction, lambda lab: lab.peek(M.ROOM) == second)
 
 
-def check_doors(lab, game, start):
-    wrong_without, wrong_with = [], []
+def check_doors(lab: Lab, game: int, start: bytes) -> None:
+    wrong_without: list[str] = []
+    wrong_with: list[str] = []
     for floor in range(R.FLOOR_COUNT):
         locked = R.locked_doors(rom, floor, game)
         for door in range(R.DOOR_COUNT):
@@ -140,7 +142,7 @@ def check_doors(lab, game, start):
     record("the master key opens every locked door", game, [], wrong_with)
 
 
-def enter_room(lab, start, floor, room):
+def enter_room(lab: Lab, start: bytes, floor: int, room: int) -> bool:
     """Come into `room` through one of its doors, so the game works out its stairs itself."""
     lab.load(start)
     for direction, (kind, _number) in R.room_exits(rom, room).items():
@@ -152,15 +154,16 @@ def enter_room(lab, start, floor, room):
     return False
 
 
-def expected_stairs_byte(floor, room, game):
+def expected_stairs_byte(floor: int, room: int, game: int) -> int:
     stairs = R.stairs(rom, floor, game).get(room)
     if stairs is None:
         return 0x0F
     return R.EDGES.index(stairs["edge"]) | (4 if stairs["goes"] == "up" else 0)
 
 
-def check_stairs(lab, game, start):
-    wrong_byte, wrong_walk = [], []
+def check_stairs(lab: Lab, game: int, start: bytes) -> None:
+    wrong_byte: list[str] = []
+    wrong_walk: list[str] = []
     for floor in range(R.FLOOR_COUNT):
         for room in range(R.ROOM_COUNT):
             if not enter_room(lab, start, floor, room):
@@ -176,7 +179,7 @@ def check_stairs(lab, game, start):
     record("walking off at the stairs changes floor that way", game, [], wrong_walk)
 
 
-def go_to_centre(lab, room):
+def go_to_centre(lab: Lab, room: int) -> None:
     """Walk to the room's centre: across first, then up or down (doors line up with the centre)."""
     x, y = R.room_centre(rom, room)
     across = "right" if lab.peek(M.POS_X) < x else "left"
@@ -185,7 +188,7 @@ def go_to_centre(lab, room):
     walk_until(lab, up_down, lambda lab: lab.peek(M.POS_Y) == y)
 
 
-def stairs_walk_works(lab, floor, room, game):
+def stairs_walk_works(lab: Lab, floor: int, room: int, game: int) -> bool:
     stairs = R.stairs(rom, floor, game)[room]
     go_to_centre(lab, room)
     direction = {"left": "left", "right": "right", "top": "up", "bottom": "down"}[stairs["edge"]]
@@ -194,7 +197,7 @@ def stairs_walk_works(lab, floor, room, game):
     return lab.peek(M.FLOOR) == floor + change
 
 
-def check_key(lab, game, start):
+def check_key(lab: Lab, game: int, start: bytes) -> None:
     lab.load(start)
     at_start = (lab.peek(M.ITEM_FLOOR), lab.peek(M.ITEM_X), lab.peek(M.ITEM_Y))
     record("master key starts beside the player", game, game == 2, at_start == (0, 0x74, 0x84),
@@ -207,14 +210,14 @@ def check_key(lab, game, start):
     record("master key shown (and can be picked up)", game, game >= 2, lab.peek(M.CARRIED) == KEY)
 
 
-def put_monster_on_player(lab, monster):
+def put_monster_on_player(lab: Lab, monster: int) -> None:
     lab.poke(M.MONSTER_FLOOR + monster, lab.peek(M.FLOOR))
     lab.poke(M.MONSTER_ROOM + monster, lab.peek(M.ROOM))
     lab.poke(M.MONSTER_X + monster, lab.peek(M.POS_X))
     lab.poke(M.MONSTER_Y + monster, lab.peek(M.POS_Y))
 
 
-def caught_by(lab, monster, frames=120):
+def caught_by(lab: Lab, monster: int, frames: int = 120) -> bool:
     for _ in range(frames):
         put_monster_on_player(lab, monster)
         run(lab, 1, keep=[monster])
@@ -223,7 +226,7 @@ def caught_by(lab, monster, frames=120):
     return False
 
 
-def check_monsters(lab, game, start):
+def check_monsters(lab: Lab, game: int, start: bytes) -> None:
     lab.load(start)
     record("monsters in play", game, 3 if game < 4 else 5, lab.peek(M.LAST_MONSTER) + 1)
     lab.load(start)
@@ -238,7 +241,7 @@ def check_monsters(lab, game, start):
     record("a monster in your room is shown", game, True, monster_shown(lab, start, room=2))
 
 
-def monster_shown(lab, start, room):
+def monster_shown(lab: Lab, start: bytes, room: int) -> bool:
     """Put the bat at (or just left of) a room's centre on the player's floor, level with the player in
     room 2, and watch a few frames for the game drawing a monster-sized sprite."""
     lab.load(start)
@@ -256,7 +259,7 @@ def monster_shown(lab, start, room):
     return shown
 
 
-def check_start_places(lab, game, start, presses=10):
+def check_start_places(lab: Lab, game: int, start: bytes, presses: int = 10) -> None:
     """Press RESET at different moments; the items must land where the model says."""
     lab.load(start)
     wrong = 0
@@ -275,12 +278,12 @@ def check_start_places(lab, game, start, presses=10):
     record("items start where the RESET model says", game, 0, wrong, f"({presses} presses)")
 
 
-def check_door_sound(lab, game, start):
+def check_door_sound(lab: Lab, game: int, start: bytes) -> None:
     """Through door 0 (with the key, in case it's locked): is there a doorway or new-room sound?"""
     lab.load(start)
     lab.poke(M.CARRIED, KEY)
     walk_until(lab, "left", lambda lab: lab.peek(M.POS_X) <= 0x74)
-    heard = set()
+    heard: set[int] = set()
     for _ in range(WALK_LIMIT):
         run(lab, 1, [JOY_DOWN])
         heard.add(lab.peek(0x93))
@@ -289,7 +292,7 @@ def check_door_sound(lab, game, start):
     record("doors make sounds (doorway, new room)", game, game >= 1, bool(heard & {4, 8}), f"{sorted(heard)}")
 
 
-def lightning_frames(lab, start, switch):
+def lightning_frames(lab: Lab, start: bytes, switch: int) -> int:
     lab.load(start)
     lab.run(5, [switch])  # the switch stays put (and isn't part of the save state)
     flashes = 0
@@ -301,7 +304,7 @@ def lightning_frames(lab, start, switch):
     return flashes
 
 
-def check_lightning(lab, game, start):
+def check_lightning(lab: Lab, game: int, start: bytes) -> None:
     on_b = lightning_frames(lab, start, LEFT_DIFFICULTY_B)
     on_a = lightning_frames(lab, start, LEFT_DIFFICULTY_A)
     lab.run(5, [LEFT_DIFFICULTY_B])
@@ -310,7 +313,7 @@ def check_lightning(lab, game, start):
 
 
 # --- report ------------------------------------------------------------------------------------------
-def print_table():
+def print_table() -> int:
     print(f"{'rule':52s}" + "".join(f"{game + 1:>3d}" for game in GAMES))
     wrong = 0
     for rule, by_game in results.items():
@@ -326,7 +329,7 @@ def print_table():
     return wrong
 
 
-def main():
+def main() -> None:
     lab = Lab()
     for game in GAMES:
         start = choose_game(lab, game)

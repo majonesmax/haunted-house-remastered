@@ -16,6 +16,7 @@ Pokes are for research only. A remaster must never write the game's RAM while so
 import ctypes as C
 import os
 import sys
+from typing import Callable, Iterable
 
 import numpy as np
 
@@ -25,6 +26,7 @@ SHOTS = os.path.join(HERE, "shots")
 sys.path.insert(0, HERE)
 
 from game import emulator as E  # noqa: E402
+from shared.types import Picture  # noqa: E402
 
 # Stella softens this game's flicker with its "phosphor" effect: each colour channel of the picture is the
 # larger of this frame and half of the previous picture (checked over 120 frames). The core keeps doing it
@@ -42,9 +44,11 @@ LEFT_DIFFICULTY_A, LEFT_DIFFICULTY_B = 10, 12
 
 
 class Lab:
-    def __init__(self, rom=ROM):
+    def __init__(self, rom: str = ROM):
         self.core = E.Core()
         self.core.load(rom)
+        assert self.core.ram is not None   # load() succeeded, so the core's RAM is there
+        self.memory: E.Ram = self.core.ram
         self.frame_count = 0
         lib = self.core.lib
         lib.retro_serialize_size.restype = C.c_size_t
@@ -53,7 +57,7 @@ class Lab:
         self.run(30)  # let the console settle after power-on
 
     # --- running --------------------------------------------------------------------------
-    def run(self, frames=1, held=()):
+    def run(self, frames: int = 1, held: Iterable[int] = ()) -> None:
         """Run some frames with the given joypad ids held."""
         for _ in range(frames):
             self.core.joy.clear()
@@ -61,15 +65,16 @@ class Lab:
             self.core.run()
             self.frame_count += 1
 
-    def hold(self, *held, frames=1):
+    def hold(self, *held: int, frames: int = 1) -> None:
         self.run(frames, held)
 
-    def reset(self):
+    def reset(self) -> None:
         """Press and release RESET: a new game in the current game number."""
         self.hold(RESET, frames=5)
         self.run(5)
 
-    def run_until(self, test, limit=600, held=()):
+    def run_until(self, test: Callable[["Lab"], object], limit: int = 600,
+                  held: Iterable[int] = ()) -> int | None:
         """Run frames until test(lab) is true; return the frames it took, or None if it never was."""
         for count in range(limit):
             if test(self):
@@ -79,32 +84,32 @@ class Lab:
 
     # --- memory ---------------------------------------------------------------------------
     @property
-    def ram(self):
-        return self.core.ram
+    def ram(self) -> E.Ram:
+        return self.memory
 
-    def peek(self, address):
-        return int(self.core.ram[address - 0x80])
+    def peek(self, address: int) -> int:
+        return int(self.memory[address - 0x80])
 
-    def poke(self, address, value):
-        self.core.ram[address - 0x80] = value & 0xFF
+    def poke(self, address: int, value: int) -> None:
+        self.memory[address - 0x80] = value & 0xFF
 
-    def snapshot(self):
-        return bytes(self.core.ram)
+    def snapshot(self) -> bytes:
+        return bytes(self.memory)
 
     # --- save states ----------------------------------------------------------------------
-    def save(self):
+    def save(self) -> bytes:
         size = self.core.lib.retro_serialize_size()
         buffer = C.create_string_buffer(size)
         if not self.core.lib.retro_serialize(buffer, size):
             raise RuntimeError("the core would not save its state")
         return buffer.raw
 
-    def load(self, state):
+    def load(self, state: bytes) -> None:
         buffer = C.create_string_buffer(state, len(state))
         if not self.core.lib.retro_unserialize(buffer, len(state)):
             raise RuntimeError("the core would not load the state")
 
     # --- the picture ----------------------------------------------------------------------
-    def picture(self):
+    def picture(self) -> Picture:
         """The current frame as an RGB array (rows, columns, 3)."""
         return np.array(self.core.frame)

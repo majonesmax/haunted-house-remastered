@@ -22,20 +22,23 @@ sys.path.insert(0, HERE)
 from game import monsters as model  # noqa: E402
 from game import ram_map as M  # noqa: E402
 from game import rom as R  # noqa: E402
+from shared.types import Point, Rgb  # noqa: E402
+
+Trails = dict[int, list[tuple[int, int, int]]]   # monster -> its (floor, x, y) every frame
 
 GAME = 2                 # game 3
 FRAMES = 20000
 WAYPOINT_COLOUR = (255, 255, 255)
 
 
-def record(frames):
+def record(frames: int) -> Trails:
     """Each monster's (floor, x, y) every frame, while the player waits with the scepter."""
     lab = Lab()
     while lab.peek(M.GAME_NUMBER) != GAME:
         lab.hold(SELECT, frames=2)
         lab.run(2)
     lab.reset()
-    trails = {monster: [] for monster in range(5)}
+    trails: Trails = {monster: [] for monster in range(5)}
     for _ in range(frames):
         lab.poke(M.CARRIED, model.SCEPTER)
         lab.run(1)
@@ -46,7 +49,7 @@ def record(frames):
     return trails
 
 
-def draw_waypoints(draw, rom, floor, left, top):
+def draw_waypoints(draw: ImageDraw.ImageDraw, rom: bytes, floor: int, left: int, top: int) -> None:
     """Room centres (circles), doors (squares) and this floor's stairs (diamonds), joined as monsters
     walk them: centre -> door -> next centre, centre -> stairs."""
     for door, rooms in R.doors(rom).items():
@@ -65,12 +68,13 @@ def draw_waypoints(draw, rom, floor, left, top):
         draw.ellipse([x - 4, y - 4, x + 4, y + 4], outline=WAYPOINT_COLOUR)
 
 
-def waypoint_on_map(rom, index, left, top):
+def waypoint_on_map(rom: bytes, index: int, left: int, top: int) -> Point:
     x, y = R.table(rom, "WAYPOINT_X")[index], R.table(rom, "WAYPOINT_Y")[index]
     return to_map(x + 4, y, left, top)  # +4: the middle of an 8-wide sprite
 
 
-def draw_trails(draw, rom, palette, trails, floor, left, top):
+def draw_trails(draw: ImageDraw.ImageDraw, rom: bytes, palette: dict[int, Rgb], trails: Trails, floor: int,
+                left: int, top: int) -> None:
     for monster, points in trails.items():
         colour = rgb_for(palette, colour_number(rom, monster + 1))
         for here_floor, x, y in points:
@@ -79,7 +83,7 @@ def draw_trails(draw, rom, palette, trails, floor, left, top):
                 draw.point((screen_x, screen_y), fill=colour)
 
 
-def draw_sheet(rom, trails):
+def draw_sheet(rom: bytes, trails: Trails) -> Image.Image:
     palette = ntsc_palette()
     floor_width, floor_height = FLOOR_WIDTH * MAP_SCALE, FLOOR_HEIGHT * MAP_SCALE
     margin, title = 24, 22
@@ -98,7 +102,7 @@ def draw_sheet(rom, trails):
     return sheet
 
 
-def main():
+def main() -> None:
     frames = int(sys.argv[1]) if len(sys.argv) > 1 else FRAMES
     rom = R.load()
     sheet = draw_sheet(rom, record(frames))

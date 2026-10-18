@@ -16,7 +16,7 @@ import creatures  # noqa: E402
 import manor  # noqa: E402
 
 
-def save_all(pictures, folder):
+def save_all(pictures: dict, folder: str) -> int:
     """Write the pictures as PNGs, after clearing out the old ones (so a renamed picture leaves no copy)."""
     os.makedirs(folder, exist_ok=True)
     for old in os.listdir(folder):
@@ -27,7 +27,7 @@ def save_all(pictures, folder):
     return len(pictures)
 
 
-def main():
+def main() -> None:
     cast = save_all(creatures.cast_pictures(), os.path.join(PACK, "cast"))
     world = save_all(manor.world_pictures(), os.path.join(PACK, "world"))
     print(f"{cast} cast pictures, {world} world pictures")

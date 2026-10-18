@@ -10,6 +10,6 @@ from game import paths
 FILES = {False: "DejaVuSansMono.ttf", True: "DejaVuSansMono-Bold.ttf"}
 
 
-def mono(size, bold=False):
+def mono(size: int, bold: bool = False) -> pygame.font.Font:
     """A pygame font, `size` pixels."""
     return pygame.font.Font(os.path.join(paths.FONTS, FILES[bold]), size)

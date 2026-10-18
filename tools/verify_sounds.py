@@ -17,6 +17,7 @@ import os
 import sys
 import wave
 from collections import Counter
+from typing import Callable, Iterable
 
 import numpy as np
 
@@ -28,19 +29,20 @@ from game import monsters as model  # noqa: E402
 from game import ram_map as M  # noqa: E402
 from game import rom as R  # noqa: E402
 from game import sounds as S  # noqa: E402
+from shared.types import Samples  # noqa: E402
 
 SOUND_BYTES = [S.EFFECT, S.EFFECT_TIME, S.MOOD_PITCH, S.MOOD_DIRECTION, S.THUNDER]
 SOUNDS_FOLDER = os.path.join(SHOTS, "sounds")
 NOTE_FRAMES = 16
 
 rom = R.load()
-problems = []
-fits = Counter()          # (effect, "before"/"after") -> frames where that order fitted
-effects_heard = Counter()
+problems: list[tuple[str, dict[str, tuple[int, int]]]] = []   # (scene, {byte: (before, after)})
+fits: Counter[tuple[int, str]] = Counter()   # (effect, "before"/"after") -> frames where that order fitted
+effects_heard: Counter[int] = Counter()
 
 
 # --- the per-frame check -----------------------------------------------------------------------------
-def candidates(before, after):
+def candidates(before: bytes, after: bytes) -> list[tuple[str, model.State]]:
     """The sound bytes the model allows after this frame: no effect started, or the effect the game shows
     started before or after the sound update."""
     base = model.State(before)
@@ -61,7 +63,7 @@ def candidates(before, after):
     return options
 
 
-def check_frame(scene, before, after):
+def check_frame(scene: str, before: bytes, after: bytes) -> None:
     for label, state in candidates(before, after):
         if all(state[address] == after[address - 0x80] for address in SOUND_BYTES):
             if label != "none":
@@ -75,12 +77,12 @@ def check_frame(scene, before, after):
 class Scene:
     """Runs frames for one scene, checking each and keeping the audio."""
 
-    def __init__(self, lab, name):
+    def __init__(self, lab: Lab, name: str):
         self.lab, self.name = lab, name
-        self.audio = []
+        self.audio: list[Samples] = []
         lab.core.take_audio()
 
-    def run(self, frames=1, held=(), park=True):
+    def run(self, frames: int = 1, held: Iterable[int] = (), park: bool = True) -> None:
         for _ in range(frames):
             if park:
                 far = (self.lab.peek(M.FLOOR) + 2) & 3
@@ -91,14 +93,15 @@ class Scene:
             check_frame(self.name, before, self.lab.snapshot())
             self.audio.append(self.lab.core.take_audio())
 
-    def walk_until(self, button, test, limit=300, park=True):
+    def walk_until(self, button: int, test: Callable[[Lab], bool], limit: int = 300,
+                   park: bool = True) -> bool:
         for _ in range(limit):
             if test(self.lab):
                 return True
             self.run(1, [button], park)
         return False
 
-    def save(self):
+    def save(self) -> tuple[Samples, int]:
         samples = np.concatenate(self.audio)
         rate = int(self.lab.core.av_info().timing.sample_rate)
         os.makedirs(SOUNDS_FOLDER, exist_ok=True)
@@ -112,7 +115,7 @@ class Scene:
 
 
 # --- the scenes --------------------------------------------------------------------------------------
-def new_game(lab, game):
+def new_game(lab: Lab, game: int) -> bytes:
     while lab.peek(M.GAME_NUMBER) != game:
         lab.hold(SELECT, frames=2)
         lab.run(2)
@@ -121,7 +124,7 @@ def new_game(lab, game):
     return lab.save()
 
 
-def scene_walls_and_doors(lab, start):
+def scene_walls_and_doors(lab: Lab, start: bytes) -> None:
     """Game 2: game 1 makes no door sounds at all ($FCD1)."""
     lab.load(start)
     scene = Scene(lab, "bump-doorway-new-room")
@@ -133,7 +136,7 @@ def scene_walls_and_doors(lab, start):
     scene.save()
 
 
-def scene_stairs(lab, start):
+def scene_stairs(lab: Lab, start: bytes) -> None:
     lab.load(start)
     scene = Scene(lab, "stairs-up-and-down")
     scene.walk_until(JOY_LEFT, lambda lab: lab.peek(M.POS_X) <= 0x74)
@@ -145,7 +148,7 @@ def scene_stairs(lab, start):
     scene.save()
 
 
-def scene_blocked(lab, start):
+def scene_blocked(lab: Lab, start: bytes) -> None:
     lab.load(start)
     scene = Scene(lab, "blocked-by-a-locked-door")
     scene.walk_until(JOY_LEFT, lambda lab: lab.peek(M.POS_X) <= 0x74)
@@ -153,13 +156,13 @@ def scene_blocked(lab, start):
     scene.save()
 
 
-def place_item(lab, item, dx, dy):
+def place_item(lab: Lab, item: int, dx: int, dy: int) -> None:
     lab.poke(M.ITEM_FLOOR + item, lab.peek(M.FLOOR))
     lab.poke(M.ITEM_X + item, lab.peek(M.POS_X) + dx)
     lab.poke(M.ITEM_Y + item, lab.peek(M.POS_Y) + dy)
 
 
-def scene_items(lab, start):
+def scene_items(lab: Lab, start: bytes) -> None:
     lab.load(start)
     scene = Scene(lab, "pick-up-and-drop")
     place_item(lab, 1, 6, -2)
@@ -172,7 +175,7 @@ def scene_items(lab, start):
     scene.save()
 
 
-def scene_urn(lab, start):
+def scene_urn(lab: Lab, start: bytes) -> None:
     lab.load(start)
     scene = Scene(lab, "urn-pieces-join-then-whole")
     lab.poke(M.CARRIED, 2)
@@ -188,7 +191,7 @@ def scene_urn(lab, start):
     scene.save()
 
 
-def scene_win(lab, start):
+def scene_win(lab: Lab, start: bytes) -> None:
     lab.load(start)
     scene = Scene(lab, "win-tune")
     lab.poke(M.CARRIED, 2)
@@ -202,7 +205,7 @@ def scene_win(lab, start):
     check_win_notes(scene, first_frame, clock_at_start, rate)
 
 
-def check_win_notes(scene, first_frame, clock_at_start, rate):
+def check_win_notes(scene: Scene, first_frame: int, clock_at_start: int, rate: int) -> None:
     """Measure each note's pitch with an FFT and compare with the model's register values."""
     for note_number in range(4):
         frames = []
@@ -215,11 +218,12 @@ def check_win_notes(scene, first_frame, clock_at_start, rate):
         spectrum = np.abs(np.fft.rfft(samples * np.hanning(len(samples))))
         heard = np.fft.rfftfreq(len(samples), 1 / rate)[spectrum.argmax()]
         expected = S.pitch(S.PURE_TONE_6, R.table(rom, "WIN_TUNE")[note_number])
+        assert expected is not None   # a pure tone always has a pitch
         close = abs(heard - expected) / expected < 0.03
         note_results.append((note_number, expected, heard, close))
 
 
-def scene_thunder(lab, start):
+def scene_thunder(lab: Lab, start: bytes) -> None:
     lab.load(start)
     scene = Scene(lab, "caught-thunder")
     for _ in range(120):
@@ -234,7 +238,7 @@ def scene_thunder(lab, start):
     scene.save()
 
 
-def scene_monster_near(lab, start):
+def scene_monster_near(lab: Lab, start: bytes) -> None:
     lab.load(start)
     scene = Scene(lab, "monster-in-the-room")
     for frame in range(900):
@@ -248,10 +252,10 @@ def scene_monster_near(lab, start):
     scene.save()
 
 
-note_results = []
+note_results: list[tuple[int, float, float, bool]] = []   # (note, model's Hz, heard Hz, close enough?)
 
 
-def report():
+def report() -> int:
     print("effects seen in the scenes (frames):")
     for effect, count in sorted(effects_heard.items()):
         name = S.EFFECT_NAMES.get(effect, "none (footsteps / quiet)")
@@ -268,7 +272,7 @@ def report():
     return len(problems) + sum(not close for *_rest, close in note_results)
 
 
-def main():
+def main() -> None:
     lab = Lab()
     game_1 = new_game(lab, 0)
     scene_walls_and_doors(lab, new_game(lab, 1))

@@ -22,6 +22,7 @@ from lab import HERE, SHOTS  # noqa: E402
 sys.path.insert(0, HERE)
 from game import palette  # noqa: E402
 from game import rom as R  # noqa: E402
+from shared.types import Point, Rgb  # noqa: E402
 
 PIXEL = 6            # sprite pixels are drawn this big on the cast sheet
 MAP_SCALE = 2        # floor units -> pixels on the mansion sheet
@@ -30,22 +31,25 @@ BACKGROUND, INK, DIM = (16, 16, 24), (230, 230, 230), (120, 120, 130)
 LOCKED, STAIRS_UP, STAIRS_DOWN, FRONT_DOOR = (230, 60, 60), (90, 220, 120), (240, 190, 60), (120, 200, 255)
 WALL_COLOUR_FIRST = 8   # floor f's walls use palette entry 8 + f
 ITEM_COLOURS = "ITEM_COLOURS"
+Entry = tuple[str, list[str], Rgb, int]   # (label, sprite rows, colour, how many times wider)
+Palette = dict[int, Rgb]
 
 
-def ntsc_palette():
+def ntsc_palette() -> Palette:
     return palette.load()
 
 
-def rgb_for(palette, colour_byte):
+def rgb_for(palette: Palette, colour_byte: int) -> Rgb:
     return palette[colour_byte & 0xFE]
 
 
-def colour_number(rom, index):
+def colour_number(rom: bytes, index: int) -> int:
     return R.table(rom, "COLOURS")[index]
 
 
 # --- the cast ----------------------------------------------------------------------------------------
-def draw_sprite(draw, rows, left, top, colour, width=1):
+def draw_sprite(draw: ImageDraw.ImageDraw, rows: list[str], left: int, top: int, colour: Rgb,
+                width: int = 1) -> None:
     for row_number, row in enumerate(rows):
         for column, cell in enumerate(row):
             if cell == "#":
@@ -54,37 +58,38 @@ def draw_sprite(draw, rows, left, top, colour, width=1):
                 draw.rectangle([x, y, x + PIXEL * width - 1, y + PIXEL - 1], fill=colour)
 
 
-def cast_entries(rom, palette):
+def cast_entries(rom: bytes, palette: Palette) -> list[list[Entry]]:
     """(label, rows, colour, width) for every sprite, in sheet order, grouped into lines."""
     item_colours = R.table(rom, ITEM_COLOURS)
-    items = []
+    items: list[Entry] = []
     for shape in range(9):
         label = R.ITEM_NAMES[shape] if shape < 2 else R.URN_SHAPES[shape]
         colour_index = item_colours[min(shape, 2)]
         rows = R.sprite_rows(rom, R.item_sprite_address(shape), 8)
         items.append((label, rows, rgb_for(palette, colour_number(rom, colour_index)), 1))
-    monsters = []
+    monsters: list[Entry] = []
     for monster in range(3):
         colour = rgb_for(palette, colour_number(rom, monster + 1))
         for frame, address in enumerate(R.monster_sprite_addresses(rom, monster)):
             label = f"{R.MONSTER_NAMES[monster]} {frame + 1}"
             monsters.append((label, R.sprite_rows(rom, address, 10), colour, 1))
-    stairs = []
+    stairs: list[Entry] = []
     for number in range(4):
         stairs.append((f"stairs {number}", R.sprite_rows(rom, 0xFE8C + 17 * number, 17), DIM, 1))
-    glow = [("glow big", R.sprite_rows(rom, 0xFF50, 28), (192, 97, 47), 4),
+    glow: list[Entry] = [("glow big", R.sprite_rows(rom, 0xFF50, 28), (192, 97, 47), 4),
             ("glow small", R.sprite_rows(rom, 0xFF6C, 28), (192, 97, 47), 4)]
-    digits = [(str(digit), R.sprite_rows(rom, 0xFF00 + 8 * digit, 8), INK, 1) for digit in range(10)]
+    digits: list[Entry] = [(str(digit), R.sprite_rows(rom, 0xFF00 + 8 * digit, 8), INK, 1)
+                           for digit in range(10)]
     return [items, monsters + stairs, glow + eyes_entries(), digits]
 
 
-def eyes_entries():
+def eyes_entries() -> list[Entry]:
     """The eyes are built in RAM each frame from constants in the code ($F318-$F336): whites $E7 on all
     three rows, and one row swapped for a pupil row - which row and which pupils follow the joystick."""
     whites, centre, right, left = 0xE7, 0xA5, 0xC6, 0x63
     looks = {"eyes": (centre, 1), "eyes right": (right, 1), "eyes left": (left, 1),
              "eyes up": (centre, 2), "eyes down": (centre, 0)}
-    entries = []
+    entries: list[Entry] = []
     for label, (pupils, pupil_row) in looks.items():
         data = [whites, whites, whites]
         data[pupil_row] = pupils
@@ -93,7 +98,7 @@ def eyes_entries():
     return entries
 
 
-def draw_cast(rom, palette):
+def draw_cast(rom: bytes, palette: Palette) -> Image.Image:
     lines = cast_entries(rom, palette)
     cell_width, gap = 8 * PIXEL * 4 + 24, 40
     width = max(sum(8 * PIXEL * entry[3] + 24 for entry in line) for line in lines) + 24
@@ -115,7 +120,7 @@ def draw_cast(rom, palette):
     return sheet
 
 
-def draw_palette(draw, rom, palette, top):
+def draw_palette(draw: ImageDraw.ImageDraw, rom: bytes, palette: Palette, top: int) -> None:
     draw.text((12, top), "palette (COLOURS): entry, colour byte - 1 lightning/ghost, 6 urn, 8-11 walls of "
                          "floors 1-4", fill=DIM)
     for index in range(12):
@@ -126,12 +131,12 @@ def draw_palette(draw, rom, palette, top):
 
 
 # --- the mansion -------------------------------------------------------------------------------------
-def to_map(x, y, left, top):
+def to_map(x: int, y: int, left: int, top: int) -> Point:
     """Floor units -> sheet pixels. Up is +y in the game, so it is flipped for the picture."""
     return left + x * MAP_SCALE, top + (FLOOR_HEIGHT - 1 - y) * MAP_SCALE
 
 
-def draw_walls(draw, rom, left, top, colour):
+def draw_walls(draw: ImageDraw.ImageDraw, rom: bytes, left: int, top: int, colour: Rgb) -> None:
     for y in range(FLOOR_HEIGHT):
         for x in range(FLOOR_WIDTH):
             if R.wall_at(rom, x, y):
@@ -140,7 +145,7 @@ def draw_walls(draw, rom, left, top, colour):
                                fill=colour)
 
 
-def door_bar(rom, door, rooms):
+def door_bar(rom: bytes, door: int, rooms: tuple[int, ...]) -> tuple[int, int, int, int]:
     """The rectangle (in floor units) of a door's opening: x0, y0, x1, y1."""
     first_x, first_y = R.room_centre(rom, rooms[0])
     second_x, second_y = R.room_centre(rom, rooms[1])
@@ -152,7 +157,8 @@ def door_bar(rom, door, rooms):
     return 0x40, row * 16, 0x5F, row * 16 + 15
 
 
-def draw_floor(draw, rom, palette, floor, game, left, top):
+def draw_floor(draw: ImageDraw.ImageDraw, rom: bytes, palette: Palette, floor: int, game: int, left: int,
+               top: int) -> None:
     wall_colour = rgb_for(palette, colour_number(rom, WALL_COLOUR_FIRST + floor))
     draw_walls(draw, rom, left, top, wall_colour)
     for room in range(R.ROOM_COUNT):
@@ -174,7 +180,7 @@ def draw_floor(draw, rom, palette, floor, game, left, top):
         draw.rectangle([x, y - 8, x + 16, y + 8], fill=FRONT_DOOR)
 
 
-def draw_mansion(rom, palette):
+def draw_mansion(rom: bytes, palette: Palette) -> Image.Image:
     games = [(0, "games 1-2 (no locks)"), (2, "games 3-8"), (R.GAME_9, "game 9")]
     floor_width, floor_height = FLOOR_WIDTH * MAP_SCALE, FLOOR_HEIGHT * MAP_SCALE
     margin, title = 24, 22
@@ -193,7 +199,7 @@ def draw_mansion(rom, palette):
     return sheet
 
 
-def main():
+def main() -> None:
     os.makedirs(SHOTS, exist_ok=True)
     rom = R.load()
     palette = ntsc_palette()

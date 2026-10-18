@@ -1,5 +1,7 @@
 -r requirements.txt
 # development: the readability check (tools/readability.py, ruff.toml)
 ruff==0.17.1
+# the type checker (pyrightconfig.json; tools/readability.py counts what it finds)
+pyright==1.1.414
 # building the downloads only (package/build.py):
 pyinstaller>=6.0

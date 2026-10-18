@@ -13,7 +13,7 @@ APP_NAME = "Haunted House"
 APP_VERSION = "1.1"
 FROZEN = getattr(sys, "frozen", False)
 if FROZEN:  # a packaged app: everything bundled is unpacked here
-    ROOT = getattr(sys, "_MEIPASS", None)
+    ROOT: str = getattr(sys, "_MEIPASS")   # PyInstaller always sets it in a packaged app
 else:
     ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SYSTEM = {"darwin": "macos", "win32": "windows"}.get(sys.platform, "linux")
@@ -30,11 +30,11 @@ SHOTS = os.path.join(ROOT, "shots")          # development output (screenshots, 
 FONTS = os.path.join(ROOT, "shared", "fonts")
 
 
-def home(*parts):
+def home(*parts: str) -> str:
     return os.path.join(os.path.expanduser("~"), *parts)
 
 
-def linux_folder(name, fallback):
+def linux_folder(name: str, fallback: str) -> str:
     """A Linux user folder (Pictures, Videos) as the desktop names it (~/.config/user-dirs.dirs), else
     ~/fallback."""
     try:

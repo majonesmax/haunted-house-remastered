@@ -10,7 +10,7 @@ Lines are at most 30 characters, a screen's width in the looks' 8 px font, which
 """
 
 from game import rom as R
-from game.state import WHOLE_URN
+from game.state import WHOLE_URN, GameState, Item
 
 URN_PIECES = (2, 3, 4)          # item numbers
 PIECES_IN = {2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 2, 8: 3}   # an urn shape -> how many pieces it is
@@ -20,7 +20,7 @@ FRONT_DOOR_FLOOR = 0
 WHOLE_URN_NOTE = ["THE URN IS WHOLE!", "NOW GET IT OUT OF THE", "FRONT DOOR - FLOOR 1, RIGHT."]
 
 
-def hint(state, rom):
+def hint(state: GameState, rom: bytes) -> list[str]:
     """The lines for G, for this moment."""
     if state.mode != "playing":
         return ["PRESS ENTER TO START.", "TAB CHOOSES THE GAME (1-9)."]
@@ -35,11 +35,11 @@ def hint(state, rom):
     return [left_to_find(state), way(state, floor, room)]
 
 
-def holding_whole_urn(state):
+def holding_whole_urn(state: GameState) -> bool:
     return state.carried is not None and state.items[state.carried].shape == WHOLE_URN
 
 
-def get_out(state):
+def get_out(state: GameState) -> list[str]:
     """With the whole urn: out of the front door, and which way."""
     lines = ["YOU HAVE THE URN! GET OUT NOW!"]
     if state.floor == FRONT_DOOR_FLOOR and state.room == R.FRONT_DOOR_ROOM:
@@ -47,26 +47,26 @@ def get_out(state):
     return lines + ["THE FRONT DOOR IS", way(state, FRONT_DOOR_FLOOR, R.FRONT_DOOR_ROOM)]
 
 
-def take_it(state, aim):
+def take_it(state: GameState, aim: Item) -> list[str]:
     what = "THE URN IS" if aim.shape == WHOLE_URN else "A PIECE IS"
     if state.match_lit:
         return [f"{what} IN THIS ROOM.", "WALK INTO IT WHILE THE", "MATCH BURNS."]
     return [f"{what} IN THIS ROOM.", "LIGHT A MATCH - SPACE - AND", "WALK INTO IT."]
 
 
-def nearest_urn(state):
+def nearest_urn(state: GameState) -> Item | None:
     """The nearest piece, pieces or whole urn that isn't in your hands - an Item, or None."""
     lying = [item for item in state.items
              if item.number in URN_PIECES and item.shape != JOINED and item.number != state.carried]
     if not lying:
         return None
-    def distance(item):   # another floor is always further than anywhere on this one
+    def distance(item: Item) -> int:   # another floor is always further than anywhere on this one
         across = abs(item.x - state.player[0]) + abs(item.y - state.player[1])
         return abs(item.floor - state.floor) * OTHER_FLOOR + across
     return min(lying, key=distance)
 
 
-def left_to_find(state):
+def left_to_find(state: GameState) -> str:
     """'3 PIECES LEFT. THE NEAREST IS' - counting what's in your hands as found."""
     in_hand = 0
     if state.carried in URN_PIECES:
@@ -77,7 +77,7 @@ def left_to_find(state):
     return f"{left} PIECES LEFT. THE NEAREST IS"
 
 
-def way(state, floor, room):
+def way(state: GameState, floor: int, room: int) -> str:
     """Which way: up or down the stairs, else across the floor - never which room exactly."""
     if floor != state.floor:
         climbs = abs(floor - state.floor)
@@ -86,15 +86,15 @@ def way(state, floor, room):
     return across(state.room, room)
 
 
-def room_at(rom, x, y):
+def room_at(rom: bytes, x: int, y: int) -> int:
     """The room (0-5) whose middle is nearest a place on the floor."""
-    def distance(room):
+    def distance(room: int) -> int:
         centre_x, centre_y = R.room_centre(rom, room)
         return (centre_x - x) ** 2 + (centre_y - y) ** 2
     return min(range(R.ROOM_COUNT), key=distance)
 
 
-def across(from_room, to_room):
+def across(from_room: int, to_room: int) -> str:
     """The way across a floor: up/down a row, left/right a column (rooms: even on the right, 0-1 at the
     bottom)."""
     rows = to_room // 2 - from_room // 2
@@ -104,6 +104,6 @@ def across(from_room, to_room):
     return " AND ".join(part for part in (vertical, sideways) if part) + "."
 
 
-def urn_just_whole(before, after):
+def urn_just_whole(before: GameState, after: GameState) -> bool:
     """Did the urn become whole in your hands between these two states? (For the note that says so.)"""
     return holding_whole_urn(after) and not holding_whole_urn(before)

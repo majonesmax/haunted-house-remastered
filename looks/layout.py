@@ -15,6 +15,11 @@ The whole floor (256 lines up) is drawn once as one 240 x 512 picture (looks/sce
 80 lines of it around the eyes, exactly where the game's own camera puts them.
 """
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from game.state import GameState
+
 SCREEN_W, SCREEN_H = 256, 240
 UNIT_X, UNIT_Y = 1.5, 2.0           # pixels per floor unit, across and down
 VIEW_LINES, VIEW_UNITS_ACROSS = 80, 160
@@ -30,27 +35,27 @@ EDGE_STRIP = 4                      # units of wall drawn at each side of the mi
 MIDDLE_ROW = 8
 
 
-def cell_top(row):
+def cell_top(row: int) -> int:
     """The floor picture's row at the top of wall-plan row `row` (row 0 is the bottom of the floor)."""
     return int((FLOOR_LINES - (row + 1) * CELL) * UNIT_Y)
 
 
-def cell_left(column):
+def cell_left(column: int) -> int:
     return column * CELL_W
 
 
-def view_top_row(state):
+def view_top_row(state: "GameState") -> int:
     """The row of the whole-floor picture at the top of the view: its top line is view_bottom + 79."""
     top_line = state.view_bottom + VIEW_LINES - 1
     return int((FLOOR_LINES - 1 - top_line) * UNIT_Y)
 
 
-def to_view(state, x, y, height):
+def to_view(state: "GameState", x: int, y: int, height: int) -> tuple[float, float]:
     """The view pixel at the middle of a thing's footprint: x..x+7 across, lines y..y+height-1 up."""
     line = y - state.view_bottom
     return (x + 4) * UNIT_X, (VIEW_LINES - line - height / 2) * UNIT_Y
 
 
-def floor_point(row, column):
+def floor_point(row, column):   # numbers, or numpy arrays of them: the same either way
     """The floor (x, y) at the middle of a pixel of the whole-floor picture."""
     return (column + 0.5) / UNIT_X, FLOOR_LINES - (row + 0.5) / UNIT_Y

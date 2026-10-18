@@ -21,8 +21,7 @@ The world's pictures, by name (any can be left out):
     front_door        the front door, in the right-hand frame of the middle row of floor 1
 """
 
-from collections import namedtuple
-from types import SimpleNamespace
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
 
@@ -30,6 +29,12 @@ from game import rom as R
 from looks.layout import (CELL, CELL_H, CELL_W, COLUMNS, EDGE_STRIP, FACE_H, FLOOR_PX_H, MIDDLE_ROW, ROWS,
                           UNIT_X, VIEW_W, cell_left, cell_top)
 from shared.pixelart import blit
+from shared.types import Mask, Picture, Rgb
+
+if TYPE_CHECKING:
+    from content import Pictures
+    from game.state import GameState
+    from looks.base import FloorLook
 
 SHADOW_H = 4          # px of floor darkened under a wall's face
 DECOR_EVERY = 3       # about one face in three gets a decoration
@@ -38,49 +43,66 @@ EYE_LOOKS = ("centre", "left", "right", "up", "down")
 FLAME_EVERY = 5       # frames a flickering decoration holds each picture
 EYES_NEAR = 30        # px: closer than this, a portrait looks straight out
 
-# a living decoration: its pictures by variant ("frames", a look, "lightning"), where it hangs, its beat
-Decoration = namedtuple("Decoration", "variants left top phase")
+Variants = dict[str, Any]   # a decoration's pictures: variant ("frames", an eye look, "lightning") -> picture
+                            # name; an older pack's also has "frame" -> which frame of its one picture
+
+
+class Decoration(NamedTuple):
+    """A living decoration: its pictures, where it hangs, and its beat (neighbours don't flicker as one)."""
+    variants: Variants
+    left: int
+    top: int
+    phase: int
+
+
+class Layers(NamedTuple):
+    """One frame's rows of the floor picture, in each light, to draw living decorations into."""
+    full: Picture
+    dim: Picture
+    dark: Picture
+    flash: Picture
+    walls: Mask
 
 
 class Scene:
     """full / dim / dark / flash: (FLOOR_PX_H, VIEW_W, 3) pictures of the floor lit, a little dimmer (the
     edge of the light), much dimmer (unlit) and in a lightning flash. walls: where the walls are (True)."""
 
-    def __init__(self, look, floor):
+    def __init__(self, look: "FloorLook", floor: int):
         number = floor + 1
         world = look.pack.world
-        self.walls = wall_mask(look.rom)
+        self.walls: Mask = wall_mask(look.rom)
         faces = face_mask(look.rom)
-        flat = world.get(f"wall{number}")
+        flat = world.must(f"wall{number}")   # the original draws every floor's wall and floor
         top = tile(look, world.get(f"wall{number}_top") or flat, CELL_W, CELL_H)
         face = tile(look, world.get(f"wall{number}_face") or flat, CELL_W, FACE_H)
-        floor_tile = tile(look, world.get(f"floor{number}"), CELL_W, CELL_H)
+        floor_tile = tile(look, world.must(f"floor{number}"), CELL_W, CELL_H)
         full = np.tile(floor_tile, (ROWS, COLUMNS, 1))
         full = np.where(self.walls[..., None], np.tile(top, (ROWS, COLUMNS, 1)), full)
         paint_faces(full, faces, face)
         outline(full, self.walls, faces, look.outline_colour(), trim_colour(look, world, number))
         shade_below_faces(full, faces, self.walls, look)
-        self.decorations = decorate(full, faces, decoration_kinds(world, number), floor, look)
+        kinds = decoration_kinds(world, number)
+        self.decorations: list[Decoration] = decorate(full, faces, kinds, floor, look)
         if floor == 0 and world.get("front_door"):
-            draw_front_door(full, self.walls, look.adapt_scenery(world.get("front_door")[0]))
-        self.full = full
-        self.dim = look.dimmed(full)
-        self.dark = look.dimmed(self.dim)
-        self.flash = look.lightning_colour(full)
+            draw_front_door(full, self.walls, look.adapt_scenery(world.must("front_door")[0]))
+        self.full: Picture = full
+        self.dim: Picture = look.dimmed(full)
+        self.dark: Picture = look.dimmed(self.dim)
+        self.flash: Picture = look.lightning_colour(full)
 
-    def layers(self, rows):
+    def layers(self, rows: slice) -> Layers:
         """Copies of the pictures for these rows, to draw this frame's living decorations into."""
-        return SimpleNamespace(full=self.full[rows].copy(), dim=self.dim[rows].copy(),
-                               dark=self.dark[rows].copy(), flash=self.flash[rows].copy(),
-                               walls=self.walls[rows])
+        return Layers(full=self.full[rows].copy(), dim=self.dim[rows].copy(), dark=self.dark[rows].copy(),
+                      flash=self.flash[rows].copy(), walls=self.walls[rows])
 
 
-def tile(look, frames, width, height):
+def tile(look: "FloorLook", frames: list[Picture], width: int, height: int) -> Picture:
     """A world picture, through the look's colours, scaled to width x height (RGB)."""
     return look.adapt_scenery(fit(frames[0], width, height))[..., :3]
 
 
-def wall_mask(rom):
+def wall_mask(rom: bytes) -> Mask:
     """Where the walls are on the floor picture: the ROM's wall plan, plus the thin door frames at each
     side of the middle row."""
     walls = np.zeros((FLOOR_PX_H, VIEW_W), bool)
@@ -96,7 +118,7 @@ def wall_mask(rom):
     return walls
 
 
-def face_mask(rom):
+def face_mask(rom: bytes) -> dict[tuple[int, int], bool]:
     """{(row, column): True} for each wall cell with floor directly below it on screen: those show a face."""
     faces = {}
     for row in range(1, ROWS):
@@ -108,14 +130,15 @@ def face_mask(rom):
     return faces
 
 
-def paint_faces(full, faces, face):
+def paint_faces(full: Picture, faces: dict[tuple[int, int], bool], face: Picture) -> None:
     for row, column in faces:
         bottom = cell_top(row) + CELL_H
         left = cell_left(column)
         full[bottom - FACE_H:bottom, left:left + CELL_W] = face
 
 
-def outline(full, walls, faces, colour, trim):
+def outline(full: Picture, walls: Mask, faces: dict[tuple[int, int], bool], colour: Rgb,
+            trim: Picture | None) -> None:
     """A line along every wall pixel that touches floor, and inside it on the wall tops a line of trim -
     the moulding that shows where a wall's top ends."""
     edge = touching(walls, ~walls) & walls
@@ -125,13 +148,13 @@ def outline(full, walls, faces, colour, trim):
     full[edge] = colour
 
 
-def touching(walls, mask):
+def touching(walls: Mask, mask: Mask) -> Mask:
     """Pixels with a neighbour (left, right, above, below) in mask; off the picture counts as wall."""
     padded = np.pad(mask, 1, constant_values=False)
     return padded[:-2, 1:-1] | padded[2:, 1:-1] | padded[1:-1, :-2] | padded[1:-1, 2:]
 
 
-def face_pixels(faces, shape):
+def face_pixels(faces: dict[tuple[int, int], bool], shape: tuple[int, ...]) -> Mask:
     pixels = np.zeros(shape, bool)
     for row, column in faces:
         bottom = cell_top(row) + CELL_H
@@ -139,14 +162,15 @@ def face_pixels(faces, shape):
     return pixels
 
 
-def trim_colour(look, world, number):
+def trim_colour(look: "FloorLook", world: "Pictures", number: int) -> Picture | None:
     frames = world.get(f"wall{number}_trim")
     if not frames:
         return None
     return look.adapt_scenery(frames[0])[0, 0, :3]
 
 
-def shade_below_faces(full, faces, walls, look):
+def shade_below_faces(full: Picture, faces: dict[tuple[int, int], bool], walls: Mask,
+                      look: "FloorLook") -> None:
     """The floor just below each face, in its shadow (the look's own darker colours)."""
     for row, column in faces:
         top = cell_top(row) + CELL_H
@@ -157,9 +181,9 @@ def shade_below_faces(full, faces, walls, look):
         full[band] = np.where(floor_part[..., None], darker, full[band])
 
 
-def decoration_kinds(world, number):
+def decoration_kinds(world: "Pictures", number: int) -> list[Variants]:
     """[variants, ...]: each kind of decoration for floor `number`, as {variant: picture name}."""
-    kinds = {}
+    kinds: dict[str, Variants] = {}
     for name in world.names():
         if not name.startswith(f"decor{number}_"):
             continue
@@ -174,10 +198,11 @@ def decoration_kinds(world, number):
     return found
 
 
-def decorate(full, faces, kinds, floor, look):
+def decorate(full: Picture, faces: dict[tuple[int, int], bool], kinds: list[Variants], floor: int,
+             look: "FloorLook") -> list[Decoration]:
     """Hang a decoration on about one face in DECOR_EVERY, chosen by its place so it never changes. Static
     ones are painted in; living ones are painted as they first look and returned, to redraw each frame."""
-    living = []
+    living: list[Decoration] = []
     if not kinds:
         return living
     world = look.pack.world
@@ -195,29 +220,30 @@ def decorate(full, faces, kinds, floor, look):
     return living
 
 
-def first_picture(world, variants):
+def first_picture(world: "Pictures", variants: Variants) -> Picture:
     if "centre" in variants:
-        return world.get(variants["centre"])[0]
-    return world.get(variants["frames"])[variants.get("frame", 0)]
+        return world.must(variants["centre"])[0]
+    return world.must(variants["frames"])[variants.get("frame", 0)]
 
 
-def is_living(world, variants):
-    flickers = "frames" in variants and "frame" not in variants and len(world.get(variants["frames"])) > 1
+def is_living(world: "Pictures", variants: Variants) -> bool:
+    flickers = "frames" in variants and "frame" not in variants and len(world.must(variants["frames"])) > 1
     return flickers or "centre" in variants or "lightning" in variants
 
 
-def decoration_now(world, decoration, state, frame_no, player_pixel):
+def decoration_now(world: "Pictures", decoration: Decoration, state: "GameState", frame_no: int,
+                   player_pixel: tuple[float, float]) -> tuple[str, int]:
     """(picture name, frame) a living decoration shows this frame."""
     variants = decoration.variants
     if "centre" in variants:
         return variants[eyes_toward(decoration, player_pixel)], 0
     if "lightning" in variants and state.lightning:
         return variants["lightning"], 0
-    frames = world.get(variants["frames"])
+    frames = world.must(variants["frames"])
     return variants["frames"], (frame_no // FLAME_EVERY + decoration.phase) % len(frames)
 
 
-def eyes_toward(decoration, player_pixel):
+def eyes_toward(decoration: Decoration, player_pixel: tuple[float, float]) -> str:
     """Which way a portrait's eyes look to follow the player (pixels on the floor picture)."""
     player_x, player_y = player_pixel
     dx, dy = player_x - (decoration.left + 6), player_y - (decoration.top + 5)
@@ -228,7 +254,7 @@ def eyes_toward(decoration, player_pixel):
     return "down" if dy > 0 else "up"
 
 
-def draw_front_door(full, walls, door):
+def draw_front_door(full: Picture, walls: Mask, door: Picture) -> None:
     """The front door in the right-hand frame of the middle row, on the first floor. It shows wherever the
     walls do."""
     top = cell_top(MIDDLE_ROW)
@@ -239,7 +265,7 @@ def draw_front_door(full, walls, door):
     walls[door_y:door_y + door.shape[0], door_x:door_x + door.shape[1]] |= solid
 
 
-def fit(picture, width, height):
+def fit(picture: Picture, width: int, height: int) -> Picture:
     """Scale a picture to width x height by repeating pixels (nearest neighbour)."""
     rows = np.arange(height) * picture.shape[0] // height
     columns = np.arange(width) * picture.shape[1] // width

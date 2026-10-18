@@ -9,28 +9,30 @@ made.
 import numpy as np
 
 from shared.pixelart import from_ascii
+from shared.types import Picture, Rgb
 
 
-def ramp(dark, light, count):
+def ramp(dark: Rgb, light: Rgb, count: int) -> list[Rgb]:
     """count shades from dark to light, each (r, g, b)."""
-    dark, light = np.array(dark, float), np.array(light, float)
-    colours = []
+    darkest, lightest = np.array(dark, float), np.array(light, float)
+    colours: list[Rgb] = []
     for step in range(count):
-        mixed = dark + (light - dark) * step / (count - 1)
-        colours.append(tuple(int(channel) for channel in mixed))
+        mixed = darkest + (lightest - darkest) * step / (count - 1)
+        red, green, blue = (int(channel) for channel in mixed)
+        colours.append((red, green, blue))
     return colours
 
 
-def shades(characters, colours):
+def shades(characters: str, colours: list[Rgb]) -> dict[str, Rgb]:
     """{character: colour}, pairing ramp characters ("12345") with a ramp's colours."""
     return dict(zip(characters, colours))
 
 
-def art(text, colours):
+def art(text: str, colours: dict[str, Rgb]) -> Picture:
     return from_ascii(text, colours, strict=True)
 
 
-def repeat(motif, width, height):
+def repeat(motif: str, width: int, height: int) -> str:
     """Text art filled to width x height by repeating a motif across and down."""
     rows = motif.strip("\n").split("\n")
     filled = []
@@ -40,7 +42,7 @@ def repeat(motif, width, height):
     return "\n".join(filled)
 
 
-def brightness(picture, factors):
+def brightness(picture: Picture, factors) -> Picture:   # factors: one number per row
     """Each row of an RGBA picture made lighter or darker by its factor (a vertical gradient)."""
     out = picture.copy()
     rgb = out[..., :3].astype(float) * np.asarray(factors, float)[:, None, None]
@@ -48,7 +50,8 @@ def brightness(picture, factors):
     return out
 
 
-def bevel(picture, top, left, height, width, light=1.35, dark=0.6):
+def bevel(picture: Picture, top: int, left: int, height: int, width: int, light: float = 1.35,
+          dark: float = 0.6) -> None:
     """A raised rectangle: its top and left edges lit, its bottom and right edges in shadow."""
     area = picture[top:top + height, left:left + width, :3].astype(float)
     area[0, :] *= light
@@ -58,7 +61,7 @@ def bevel(picture, top, left, height, width, light=1.35, dark=0.6):
     picture[top:top + height, left:left + width, :3] = np.clip(area, 0, 255).astype(np.uint8)
 
 
-def speckle(picture, amount, seed, strength=0.12):
+def speckle(picture: Picture, amount: float, seed: int, strength: float = 0.12) -> None:
     """Fine texture: a few pixels a little lighter or darker (stone, plaster, worn wood)."""
     rng = np.random.default_rng(seed)
     height, width = picture.shape[:2]
@@ -69,7 +72,7 @@ def speckle(picture, amount, seed, strength=0.12):
     picture[..., :3] = np.clip(rgb, 0, 255).astype(np.uint8)
 
 
-def solid(height, width, colour):
+def solid(height: int, width: int, colour: Rgb) -> Picture:
     picture = np.zeros((height, width, 4), np.uint8)
     picture[:] = (*colour, 255)
     return picture

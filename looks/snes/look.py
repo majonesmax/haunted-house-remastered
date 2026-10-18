@@ -16,11 +16,14 @@ Its own pack is packs/nocturne, drawn in 16-bit colour ramps.
 
 import numpy as np
 
+from game.state import GameState
 from looks.base import FloorLook, flicker, light_reach_grid
 from looks.layout import SCREEN_H, SCREEN_W, VIEW_H, VIEW_W, VIEW_Y
 from looks.nes.look import MANSION_AT, MOON_AT, SUN_AT, SUN_SCALE, NesLook
+from looks.scenery import Layers
 from looks.snes.outline import recolour_outline
 from shared.pixelart import snes_rgb
+from shared.types import Floats, Mask, Picture, Rgb
 
 LIGHT_FULL, LIGHT_GONE = 0.55, 1.3      # fully lit inside this much of the reach; nothing past this
 WARM = np.array([1.08, 0.94, 0.76])     # the match's light, warm
@@ -61,32 +64,32 @@ class SnesLook(NesLook):
     synth = "orchestra"
 
     # --- colours -------------------------------------------------------------------------------------
-    def adapt(self, picture):
+    def adapt(self, picture: Picture) -> Picture:
         """15-bit colour, then soft outlines and at most 15 colours (a sprite palette)."""
         return recolour_outline(self.adapt_scenery(picture))
 
-    def adapt_scenery(self, picture):
+    def adapt_scenery(self, picture: Picture) -> Picture:
         out = picture.copy()
         out[..., :3] = snes_rgb(out[..., :3])
         return out
 
-    def distant_flash(self, screen, level):
+    def distant_flash(self, screen: Picture, level: float) -> Picture:
         return snes_rgb(FloorLook.distant_flash(self, screen, level))  # not the NES's palette
 
-    def dimmed(self, rgb):
+    def dimmed(self, rgb: Picture) -> Picture:
         return snes_rgb(np.clip(rgb * DIM, 0, 255).astype(np.uint8))
 
-    def lightning_colour(self, rgb):
+    def lightning_colour(self, rgb: Picture) -> Picture:
         return snes_rgb(np.clip(rgb * 0.5 + LIGHTNING_WASH, 0, 255).astype(np.uint8))
 
-    def outline_colour(self):
+    def outline_colour(self) -> Rgb:
         return (12, 6, 20)
 
-    def opacity(self, name):
+    def opacity(self, name: str) -> float:
         return GHOST_OPACITY if name.startswith("ghost") else 1.0
 
     # --- the light: colour math ----------------------------------------------------------------------
-    def light(self, state, layers, rows, frame_no):
+    def light(self, state: GameState, layers: Layers, rows: slice, frame_no: int) -> Picture:
         """A smooth, warm gradient around the match (hottest at the flame) over the unlit scene: moonlit
         walls in game 1, black in games 2-9, the walls washed pale in a lightning flash."""
         if state.lights_on:   # the player's cheat: every lamp in the house lit
@@ -106,7 +109,7 @@ class SnesLook(NesLook):
         add_dust(picture, glow[..., 0], frame_no)
         return snes_rgb(np.clip(picture, 0, 255).astype(np.uint8))
 
-    def view(self, state, frame_no):
+    def view(self, state: GameState, frame_no: int) -> Picture:
         picture = FloorLook.view(self, state, frame_no)  # not the NES's: its dying flicker is palette-bound
         if state.mode == "dying":
             pulse = 0.5 + 0.5 * np.sin(frame_no / 4)
@@ -115,7 +118,7 @@ class SnesLook(NesLook):
         return picture
 
     # --- the endings -----------------------------------------------------------------------------------
-    def draw_dawn_sky(self, screen):
+    def draw_dawn_sky(self, screen: Picture) -> None:
         """A smooth dawn, deep blue overhead to gold at the hill, glowing round the sun."""
         rows = np.linspace(0, 1, SCREEN_H)
         stops, colours = zip(*DAWN)
@@ -128,20 +131,20 @@ class SnesLook(NesLook):
         glow = np.clip(1 - np.hypot(columns - centre_x, rows - centre_y) / SUN_GLOW_REACH, 0, 1)[..., None]
         screen[:] = (screen * (1 - glow * 0.7) + SUN_GLOW * glow * 0.7).astype(np.uint8)
 
-    def lighten(self, screen, amount):
+    def lighten(self, screen: Picture, amount: float) -> None:
         """The win at the door (and the ending fading in): the screen warming smoothly towards the light
         outside, `amount` (0-1) of the way to WARMING."""
         warmed = screen * (1 - WARMING * amount) + np.array(DAWN_LIGHT) * WARMING * amount
         screen[:] = snes_rgb(np.clip(warmed, 0, 255).astype(np.uint8))
 
     # --- the status panels ----------------------------------------------------------------------------
-    def draw_status(self, screen, state, frame_no):
+    def draw_status(self, screen: Picture, state: GameState, frame_no: int) -> None:
         panel(screen, 0, VIEW_Y - 4)
         panel(screen, VIEW_Y + VIEW_H + 4, SCREEN_H)
         super().draw_status(screen, state, frame_no)
 
     # --- the title screen -----------------------------------------------------------------------------
-    def draw_title(self, screen, state, frame_no):
+    def draw_title(self, screen: Picture, state: GameState, frame_no: int) -> None:
         """The NES title's night, with what 16 bits allow: a gradient sky, the moon's halo, rain, and
         lightning that fades. After a win, the NES ending's dawn in smooth colour."""
         super().draw_title(screen, state, frame_no)
@@ -159,7 +162,7 @@ class SnesLook(NesLook):
         screen[:] = snes_rgb(screen)
 
 
-def moon_shafts(rows):
+def moon_shafts(rows: slice) -> Floats:
     """0-1 over the view: soft slanting bands of moonlight, fixed to the floor (so they scroll with it)."""
     row_numbers = np.arange(rows.start, rows.stop)[:, None]
     columns = np.arange(VIEW_W)[None, :]
@@ -168,7 +171,7 @@ def moon_shafts(rows):
     return np.clip(1 - middle, 0, 1)[..., None] ** 0.7
 
 
-def panel(screen, top, bottom):
+def panel(screen: Picture, top: int, bottom: int) -> None:
     """A gradient panel with a bevelled edge (light along the top, dark along the bottom)."""
     rows = np.linspace(0, 1, bottom - top)[:, None]
     gradient = np.array(STATUS_TOP) * (1 - rows) + np.array(STATUS_BOTTOM) * rows
@@ -177,19 +180,19 @@ def panel(screen, top, bottom):
     screen[bottom - 1] = BEVEL_DARK
 
 
-def lightning_level(frame_no):
+def lightning_level(frame_no: int) -> float:
     """1 at a strike, fading to 0 over FLASH_FRAMES."""
     since = frame_no % FLASH_EVERY
     return max(0.0, 1 - since / FLASH_FRAMES) * 0.85
 
 
-def sky_gradient(height):
+def sky_gradient(height: int) -> Floats:
     rows = np.linspace(0, 1, height)[:, None, None]
     gradient = SKY_TOP * (1 - rows) + SKY_HORIZON * rows
     return np.repeat(gradient, SCREEN_W, axis=1)
 
 
-def add_moon_halo(screen, is_sky):
+def add_moon_halo(screen: Picture, is_sky: Mask) -> None:
     """A soft glow around the moon, on the sky only."""
     centre_x, centre_y = MOON_AT[0] + 20, MOON_AT[1] + 20
     rows, columns = np.mgrid[:is_sky.shape[0], :SCREEN_W]
@@ -200,7 +203,7 @@ def add_moon_halo(screen, is_sky):
     screen[:is_sky.shape[0]] = np.where(is_sky[..., None], glowing, sky).astype(np.uint8)
 
 
-def add_dust(picture, glow, frame_no):
+def add_dust(picture: Floats, glow: Floats, frame_no: int) -> None:
     """Specks of dust sinking and swaying through the view, seen only where the match lights them. The
     same specks every time round, so pictures repeat."""
     rng = np.random.default_rng(7)
@@ -214,7 +217,7 @@ def add_dust(picture, glow, frame_no):
     picture[floor_ys, floor_xs] += DUST * (glow[floor_ys, floor_xs] * twinkle)[:, None]
 
 
-def add_rain(screen, frame_no):
+def add_rain(screen: Picture, frame_no: int) -> None:
     """Thin streaks falling at a slant, the same pattern every time round."""
     rng = np.random.default_rng(5)
     starts_x = rng.integers(0, SCREEN_W, RAIN_DROPS)

@@ -19,6 +19,7 @@ from lab import HERE, Lab  # noqa: E402
 
 import looks  # noqa: E402
 from game.state import Game  # noqa: E402
+from shared.types import Picture  # noqa: E402
 
 MEDIA = os.path.join(HERE, "docs", "media")
 SCALE = 2
@@ -26,7 +27,7 @@ GAP = 8
 PICTURES = {"looks.png": "floor 2", "endings.png": "escaped"}
 
 
-def side_by_side(game, label):
+def side_by_side(game: Game, label: str) -> Picture:
     """The scene in every look, left to right, SCALE times size."""
     scene = dict(preview.SCENES)[label]
     pictures = []
@@ -39,7 +40,7 @@ def side_by_side(game, label):
     return joined.repeat(SCALE, axis=0).repeat(SCALE, axis=1)
 
 
-def main():
+def main() -> None:
     os.makedirs(MEDIA, exist_ok=True)
     game = Game()
     for name, label in PICTURES.items():

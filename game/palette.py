@@ -7,15 +7,17 @@ the same for every 2600 game on the same core, so it's copied here as palette_nt
 import json
 import os
 
+from shared.types import Rgb
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 TABLE = os.path.join(HERE, "palette_ntsc.json")
 
 
-def load():
+def load() -> dict[int, Rgb]:
     with open(TABLE) as table_file:
         return {int(colour): tuple(rgb) for colour, rgb in json.load(table_file).items()}
 
 
-def rgb(palette, colour):
+def rgb(palette: dict[int, Rgb], colour: int) -> Rgb:
     """A 2600 colour byte -> (r, g, b). The TIA ignores bit 0."""
     return palette[colour & 0xFE]

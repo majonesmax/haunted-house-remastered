@@ -18,6 +18,9 @@ the floor shows where the game has it - walls, items, monsters and stairs, lit o
 
 import numpy as np
 
+from game.state import GameState, Item, Monster
+from shared.types import Floats
+
 ITEM_REACH = 0x11        # items show while their light distance is under this ($F53D)
 VIEW_LINES = 80          # the view is 80 lines tall
 KEY = 0
@@ -25,17 +28,17 @@ JOINED = 0xFF
 LIGHT_HALF_WIDTH, LIGHT_HALF_HEIGHT = 16, 14   # the 2600 glow: 32 wide, 28 tall, centred on the eyes
 
 
-def walls_visible(state):
+def walls_visible(state: GameState) -> bool:
     return not state.dark or state.lightning or state.lights_on
 
 
-def on_screen(state, y, height=1):
+def on_screen(state: GameState, y: int, height: int = 1) -> bool:
     """Is any of the lines y .. y + height - 1 inside the view?"""
     bottom = y - state.view_bottom
     return bottom + height > 0 and bottom < VIEW_LINES
 
 
-def light_distance(state, x, y):
+def light_distance(state: GameState, x: int, y: int) -> int:
     """The game's cheap distance: the larger difference plus half the smaller ($F53D)."""
     across = abs(state.player[0] - x)
     up_down = abs(state.player[1] - y)
@@ -44,7 +47,7 @@ def light_distance(state, x, y):
     return across + (up_down >> 1)
 
 
-def item_visible(state, item):
+def item_visible(state: GameState, item: Item) -> bool:
     lit_enough = state.match_lit or state.lights_on
     if not lit_enough or item.floor != state.floor or item.number == state.carried:
         return False
@@ -57,7 +60,7 @@ def item_visible(state, item):
     return light_distance(state, item.x, item.y) < ITEM_REACH
 
 
-def monster_visible(state, monster):
+def monster_visible(state: GameState, monster: Monster) -> bool:
     if monster.floor != state.floor:
         return False
     if not state.dark or state.mode == "dying" or state.lights_on:
@@ -66,11 +69,11 @@ def monster_visible(state, monster):
     return in_room and on_screen(state, monster.y, 10)
 
 
-def stairs_visible(state):
+def stairs_visible(state: GameState) -> bool:
     return (state.match_lit or state.lights_on) and state.stairs is not None
 
 
-def light_reach(state, floor_xs, floor_ys):
+def light_reach(state: GameState, floor_xs: Floats | float, floor_ys: Floats | float) -> Floats:
     """How far floor points are from the match, as a fraction of the light's reach: <= 1 is lit. Works on
     single numbers or numpy arrays. Points beyond the room's limits (games 2-9) are given infinity.
     (Walls block the light too - the look decides how to show that, since it draws the walls.)"""
@@ -88,6 +91,6 @@ def light_reach(state, floor_xs, floor_ys):
     return reach
 
 
-def lit(state, x, y):
+def lit(state: GameState, x: float, y: float) -> bool:
     """Is the floor point (x, y) inside the match's light?"""
     return bool(light_reach(state, x, y) <= 1)

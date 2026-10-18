@@ -46,6 +46,7 @@ python package/build.py                    # the download for this system, in pa
 gh workflow run downloads.yml              # ...or GitHub builds Windows and macOS; a v* tag makes the release
 ruff check --config ruff.toml .            # the readability rules
 python tools/readability.py                # ...and no short names; no file may get harder to read (a hook runs it)
+pyright                                    # the type hints check out (pyrightconfig.json) - readability.py counts it too
 ```
 
 The research checks (`tools/verify_*.py`) prove what the RAM and ROM mean; run them after changing anything in
@@ -79,6 +80,9 @@ The person who owns this code reads it rather than writes it, and isn't a Python
 - **One idea per line.** Name the steps instead of nesting calls.
 - **Name the numbers.** `UNIT = 1.5` with a comment, not a bare `1.5`.
 - **Short functions:** about 40 lines at most, with few branches.
+- **Types on every signature.** `def draw(self, state: GameState, frame_no: int) -> Picture`. The plain
+  names for arrays and sounds are in `shared/types.py` (Picture, Mask, Floats, Samples, Rgb, Point,
+  Instrument); records are `typing.NamedTuple`s with a typed field per line. pyright checks them.
 - Lines up to 110 characters (`ruff.toml`).
 - `tools/readability.py` checks all of this (ruff's rules and names under 3 letters) against
   `tools/readability_baseline.json` - every file is at zero; keep it there. `.claude/settings.json` runs it

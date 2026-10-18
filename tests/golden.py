@@ -22,16 +22,17 @@ import looks  # noqa: E402
 import preview  # noqa: E402
 from game.state import Game  # noqa: E402
 from lab import SHOTS, Lab  # noqa: E402
+from shared.types import Picture  # noqa: E402
 
 GOLDEN = os.path.join(HERE, "tests", "golden.json")
 DIFFERENT = os.path.join(SHOTS, "golden")
 
 
-def fingerprints():
+def fingerprints() -> dict[str, tuple[str, Picture]]:
     """{"look/scene": (sha256, picture)} for every look's own pack and every scene."""
     game = Game()
     lab = Lab()
-    found = {}
+    found: dict[str, tuple[str, Picture]] = {}
     for platform in sorted(looks.LOOKS):
         look = looks.make(platform, game.rom)
         for label, scene in preview.SCENES:
@@ -43,7 +44,7 @@ def fingerprints():
     return found
 
 
-def main():
+def main() -> int:
     update = "--update" in sys.argv
     found = fingerprints()
     if update:

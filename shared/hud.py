@@ -2,6 +2,8 @@
 shared/hud.py.)
 """
 
+from shared.types import Picture, Rgb
+
 _FONT = """
 A .###. #...# #...# ##### #...# #...# #...#
 B ####. #...# #...# ####. #...# #...# ####.
@@ -49,7 +51,7 @@ Z ##### ....# ...#. ..#.. .#... #.... #####
 < ...#. ..#.. .#... #.... .#... ..#.. ...#.
 > .#... ..#.. ...#. ....# ...#. ..#.. .#...
 """
-GLYPHS = {" ": "." * 35}
+GLYPHS: dict[str, str] = {" ": "." * 35}
 for _line in _FONT.strip().split("\n"):
     _ch, *_rows = _line.split(" ")
     assert len(_rows) == 7 and all(len(row) == 5 for row in _rows), _line
@@ -60,11 +62,12 @@ GLYPHS.update({  # a few more, for DOS prompts and paths (a backslash can't sit 
     "_": "....." "....." "....." "....." "....." "....." "#####"})
 
 
-def text_width(text, scale=1):
+def text_width(text: str, scale: int = 1) -> int:
     return len(text) * 8 * scale
 
 
-def draw_text(img, text, x, y, colour, scale=1, shadow=(0, 0, 0)):
+def draw_text(img: Picture, text: str, x: int, y: int, colour: Rgb, scale: int = 1,
+              shadow: Rgb | None = (0, 0, 0)) -> None:
     """Draw text on an HxWx3 uint8 image (NES-style: 5x7 glyphs in 8x8 cells, 1 px drop shadow)."""
     for offset, layer_colour in ((1, shadow), (0, colour)):  # the shadow first, 1 px down and right
         if layer_colour is None:
@@ -75,7 +78,7 @@ def draw_text(img, text, x, y, colour, scale=1, shadow=(0, 0, 0)):
             draw_glyph(img, glyph, left, y + offset * scale, scale, layer_colour)
 
 
-def draw_glyph(img, glyph, left, top, scale, colour):
+def draw_glyph(img: Picture, glyph: str, left: int, top: int, scale: int, colour: Rgb) -> None:
     """One 5x7 glyph ("#" = ink, row by row) with its top-left at (left, top), each dot scale x scale."""
     for row in range(7):
         for column in range(5):
@@ -85,7 +88,7 @@ def draw_glyph(img, glyph, left, top, scale, colour):
             img[max(dot_y, 0):max(dot_y + scale, 0), max(dot_x, 0):max(dot_x + scale, 0)] = colour
 
 
-def frame_box(img, x0, y0, x1, y1, colour):
+def frame_box(img: Picture, x0: int, y0: int, x1: int, y1: int, colour: Rgb) -> None:
     """A 1 px NES-style frame with cut corners."""
     img[y0, x0 + 1:x1] = colour
     img[y1, x0 + 1:x1] = colour

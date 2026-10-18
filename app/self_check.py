@@ -9,6 +9,7 @@ throughout.
 
 import os
 import time
+from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import pygame
@@ -16,25 +17,30 @@ from PIL import Image
 
 from game import paths
 
+if TYPE_CHECKING:   # only for the type hints: app.window imports this module's caller
+    from app.window import GameWindow
+
+Say = Callable[[str], None]   # print a line, and keep it in self-check.txt
+
 LOADING_LIMIT = 60          # seconds: longer than this to load is a failure
 STEPS = [("story", 90, ()), ("title", 60, ("any key",)), ("start", 30, (pygame.K_RETURN,)),
          ("playing", 120, ()), ("match", 10, (pygame.K_SPACE,)), ("walk", 60, (pygame.K_LEFT,))]
 # (what, frames, keys held)
 
 
-def run(window):
+def run(window: "GameWindow") -> bool:
     """Run the checks on a GameWindow. True if all went well."""
     window.audio.mixer = lambda block: np.zeros_like(block)   # silent
     os.makedirs(paths.SCREENSHOTS, exist_ok=True)
     with open(os.path.join(paths.SCREENSHOTS, "self-check.txt"), "w") as log:
-        def say(line):
+        def say(line: str) -> None:
             print(line, flush=True)
             log.write(line + "\n")
         say(f"{paths.APP_NAME} {paths.APP_VERSION} on {paths.SYSTEM}")
         return load(window, say) and play(window, say)
 
 
-def load(window, say):
+def load(window: "GameWindow", say: Say) -> bool:
     start = time.perf_counter()
     while window.loading:
         window.handle_input()
@@ -46,7 +52,7 @@ def load(window, say):
     return True
 
 
-def play(window, say):
+def play(window: "GameWindow", say: Say) -> bool:
     for _what, frames, pressed in STEPS:
         if "any key" in pressed:
             window.intro, window.keys_held_off = False, True
@@ -57,8 +63,11 @@ def play(window, say):
     return report(window, say)
 
 
-def report(window, say):
+def report(window: "GameWindow", say: Say) -> bool:
     state = window.state
+    if state is None:   # never, after the frames played above - but say so rather than crash
+        say("FAIL: no frame was played")
+        return False
     window.view = "grid"
     window.other_picture = window.other_look.draw(state, window.frame_no)
     path = os.path.join(paths.SCREENSHOTS, "self-check.png")

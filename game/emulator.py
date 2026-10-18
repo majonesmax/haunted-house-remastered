@@ -18,11 +18,14 @@ import ctypes as C
 import os
 import threading
 import time
+from typing import Any, Callable
 
 import numpy as np
+from numpy.typing import NDArray
 import sounddevice as sd
 
 from game import paths
+from shared.types import Picture, Samples
 
 HERE, CORE, FROZEN = paths.ROOT, paths.CORE, paths.FROZEN
 USER_DIR, SHOTS_DIR = paths.USER_DIR, paths.SCREENSHOTS
@@ -84,20 +87,24 @@ class LogInterface(C.Structure):
 
 
 @LOG_CB
-def _core_log(level, fmt):
+def _core_log(level: int, fmt: bytes | None) -> None:
     if level >= 2 and fmt:
         print(f"[core {LOG_LEVELS[min(level, 3)]}] {fmt.decode(errors='replace').rstrip()}", flush=True)
 
 
+Ram = NDArray[np.uint8]   # the 128 bytes, live from the core (read between frames)
+Mixer = Callable[[Samples], Samples]   # mixer(block) -> block, in the sound card's callback
+
+
 class Core:
-    def __init__(self, path=CORE):
+    def __init__(self, path: str = CORE):
         self.lib = C.CDLL(path)
-        self.pixel_format = PIXEL_0RGB1555
-        self.frame = None
-        self.audio = []
-        self.joy = set()  # joypad ids held (port 0 = left joystick + console switches)
-        self.options = {}
-        self._optbuf = {}
+        self.pixel_format: int = PIXEL_0RGB1555
+        self.frame: Picture | None = None
+        self.audio: list[Samples] = []
+        self.joy: set[int] = set()  # joypad ids held (port 0 = left joystick + console switches)
+        self.options: dict[str, bytes] = {}
+        self._optbuf: dict[str, C.c_char_p] = {}
         self._keep = [ENV_CB(self._env), VIDEO_CB(self._video), AUDIO_CB(self._audio),
                       AUDIO_BATCH_CB(self._audio_batch), POLL_CB(lambda: None), STATE_CB(self._state)]
         lib = self.lib
@@ -113,11 +120,11 @@ class Core:
         lib.retro_get_system_info(C.byref(info))
         self.need_fullpath = info.need_fullpath
         lib.retro_init()
-        self.ram = None  # numpy view of the 128 bytes, valid after load()
+        self.ram: Ram | None = None  # numpy view of the 128 bytes, valid after load()
         atexit.register(self.shutdown)  # before C++'s own exit-time cleanup - see shutdown()
 
     # --- callbacks -------------------------------------------------------------------------
-    def _env(self, cmd, data):
+    def _env(self, cmd: int, data: Any) -> bool:
         """The core asking about the frontend (folders, settings, pixel format...): ENV_HANDLERS says which
         method answers which question. True = answered."""
         cmd &= 0xFFFF  # strip the "experimental" flag
@@ -126,23 +133,23 @@ class Core:
             return False  # everything else: use the core's defaults
         return handler(self, cmd, data)
 
-    def _can_dupe(self, cmd, data):  # yes: a frame may be "the same as last time"
+    def _can_dupe(self, cmd: int, data: Any) -> bool:  # yes: a frame may be "the same as last time"
         C.cast(data, C.POINTER(C.c_bool))[0] = True
         return True
 
-    def _directory(self, cmd, data):
+    def _directory(self, cmd: int, data: Any) -> bool:
         C.cast(data, C.POINTER(C.c_char_p))[0] = SAVE_DIR if cmd == ENV_GET_SAVE_DIRECTORY else SYSTEM_DIR
         return True
 
-    def _log_interface(self, cmd, data):
+    def _log_interface(self, cmd: int, data: Any) -> bool:
         C.cast(data, C.POINTER(LogInterface))[0].log = _core_log
         return True
 
-    def _pixel_format(self, cmd, data):
+    def _pixel_format(self, cmd: int, data: Any) -> bool:
         self.pixel_format = C.cast(data, C.POINTER(C.c_int))[0]
         return self.pixel_format in (PIXEL_XRGB8888, PIXEL_RGB565)
 
-    def _set_variables(self, cmd, data):
+    def _set_variables(self, cmd: int, data: Any) -> bool:
         """The core's settings, each "Description; default|other|..." -> we take the default (first)."""
         variables = C.cast(data, C.POINTER(Variable))
         i = 0
@@ -154,7 +161,7 @@ class Core:
             i += 1
         return True
 
-    def _get_variable(self, cmd, data):
+    def _get_variable(self, cmd: int, data: Any) -> bool:
         variable = C.cast(data, C.POINTER(Variable))[0]
         key = variable.key.decode() if variable.key else ""
         if key not in self.options:
@@ -163,14 +170,14 @@ class Core:
         variable.value = self._optbuf[key].value
         return True
 
-    def _no_variable_update(self, cmd, data):  # settings never change while running
+    def _no_variable_update(self, cmd: int, data: Any) -> bool:  # settings never change while running
         C.cast(data, C.POINTER(C.c_bool))[0] = False
         return True
 
-    def _accept(self, cmd, data):
+    def _accept(self, cmd: int, data: Any) -> bool:
         return True
 
-    def _video(self, data, w, h, pitch):
+    def _video(self, data: Any, w: int, h: int, pitch: int) -> None:
         if not data:
             return  # duped frame: keep the last one
         if self.pixel_format == PIXEL_XRGB8888:  # 4 bytes a pixel: blue, green, red, unused
@@ -182,25 +189,25 @@ class Core:
             red, green, blue = (buf >> 11) & 31, (buf >> 5) & 63, buf & 31
             self.frame = np.dstack([red << 3, green << 2, blue << 3]).astype(np.uint8)
 
-    def _audio(self, left, right):
+    def _audio(self, left: int, right: int) -> None:
         self.audio.append(np.array([[left, right]], np.int16))
 
-    def _audio_batch(self, data, frames):
+    def _audio_batch(self, data: Any, frames: int) -> int:
         self.audio.append(np.ctypeslib.as_array(data, shape=(frames * 2,)).reshape(frames, 2).copy())
         return frames
 
-    def _state(self, port, device, index, ident):
+    def _state(self, port: int, device: int, index: int, ident: int) -> int:
         if device == DEVICE_JOYPAD and port == 0:
             return 1 if ident in self.joy else 0
         return 0
 
     # --- API ------------------------------------------------------------------------------
-    def av_info(self):
+    def av_info(self) -> "AVInfo":
         info = AVInfo()
         self.lib.retro_get_system_av_info(C.byref(info))
         return info
 
-    def load(self, path):
+    def load(self, path: str) -> None:
         # need_fullpath: the core opens the path itself. Otherwise it wants the bytes already in memory
         # (the path is kept too, for cores that still key off its extension).
         if self.need_fullpath:
@@ -220,7 +227,7 @@ class Core:
         # a live view: reading it between retro_run() calls sees the current state, no copying, no pausing
         self.ram = np.ctypeslib.as_array(C.cast(ptr, C.POINTER(C.c_uint8)), shape=(128,))
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Shut the core down while the program is still running. Left to the C++ cleanup at exit, Stella's
         emulator object is destroyed after its logger's timer thread is gone, and its destructor can wait for
         that thread forever (TimerManager::clear): the program then hangs instead of quitting, now and then.
@@ -234,10 +241,10 @@ class Core:
         except Exception:  # never let shutting down get in the way of quitting
             pass
 
-    def run(self):
+    def run(self) -> None:
         self.lib.retro_run()
 
-    def take_audio(self):
+    def take_audio(self) -> Samples:
         samples = np.concatenate(self.audio) if self.audio else np.zeros((0, 2), np.int16)
         self.audio = []
         return samples
@@ -267,29 +274,31 @@ class AudioOut:
     runs dry it isn't played again until `prime` samples are queued, so it never comes out in crumbs.
     The emulator makes 524 samples per frame; ~31423/s against the card's 31440/s at a 59.97 Hz loop."""
 
-    def __init__(self, rate, max_ms=150, prime_ms=50, mixer=None, block=512):
+    def __init__(self, rate: int, max_ms: int = 150, prime_ms: int = 50, mixer: Mixer | None = None,
+                 block: int = 512):
         self.buf, self.lock = np.zeros((0, 2), np.int16), threading.Lock()
         self.max, self.prime = int(rate * max_ms / 1000), int(rate * prime_ms / 1000)
-        self.mixer = mixer
+        self.mixer: Mixer | None = mixer
         self.priming = True
         self.expect = True        # False while the game deliberately makes no sound (paused / room scroll)
         self.missing = 0          # samples the card wanted but didn't get when expected (diagnostics)
         self.dropped = 0          # emulator samples thrown away because the buffer was full (diagnostics)
         self.xruns = 0            # the sound card's own "callback was late" flag = audible dropouts
-        self.tap = None           # tap(block): sees every block exactly as played (recorder.py)
+        self.tap: Callable[[Samples], None] | None = None   # sees every block exactly as played (recorder)
+        self.stream: sd.OutputStream | None = None
         try:
-            self.stream = sd.OutputStream(samplerate=rate, channels=2, dtype="int16", callback=self._pull,
-                                          blocksize=block, latency="high")
-            self.stream.start()
+            stream = sd.OutputStream(samplerate=rate, channels=2, dtype="int16", callback=self._pull,
+                                     blocksize=block, latency="high")
+            stream.start()
+            self.stream = stream
         except sd.PortAudioError as error:   # no sound card (a build server): play on, silently
             print(f"no sound: {error}", flush=True)
-            self.stream = None
 
     @property
-    def underruns(self):  # old name, kept for callers
+    def underruns(self) -> int:  # old name, kept for callers
         return self.missing
 
-    def _pull(self, out, frames, _time, status):
+    def _pull(self, out: Samples, frames: int, _time: Any, status: sd.CallbackFlags) -> None:
         if status.output_underflow:
             self.xruns += 1
         block = np.zeros((frames, 2), np.int16)
@@ -310,7 +319,7 @@ class AudioOut:
         if self.tap is not None:
             self.tap(block)
 
-    def push(self, samples):
+    def push(self, samples: Samples) -> None:
         with self.lock:
             buf = np.concatenate([self.buf, samples])
             if len(buf) > self.max:  # never let latency grow

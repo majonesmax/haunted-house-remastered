@@ -10,25 +10,27 @@ Usage: python music/effects.py     -> shots/effects/<name>.wav, to listen to
 
 import os
 import wave
+from collections.abc import Sequence
 
 import numpy as np
 
 from music.chiptune import RATE, envelope, midi_hz, pulse, triangle
+from shared.types import Floats, Samples
 
 LEVEL = 14000          # effects sit a little above the music (12000)
 QUIET = 0.25           # footsteps: a quarter of that
 
 
-def seconds(count):
+def seconds(count: float) -> int:
     return int(count * RATE)
 
 
-def sweep(start_hz, end_hz, length):
+def sweep(start_hz: float, end_hz: float, length: int) -> Floats:
     """A pitch gliding from start_hz to end_hz (evenly in pitch, not in Hz)."""
     return start_hz * (end_hz / start_hz) ** np.linspace(0, 1, length)
 
 
-def noise(length, pitch=1.0, seed=1):
+def noise(length: int, pitch: float = 1.0, seed: int = 1) -> Floats:
     """NES-style noise: a random level held for 1/pitch of the time - lower pitch, lower rumble."""
     rng = np.random.default_rng(seed)
     hold = max(1, int(round(1 / pitch)))
@@ -36,11 +38,11 @@ def noise(length, pitch=1.0, seed=1):
     return np.repeat(levels, hold)[:length]
 
 
-def decay(length, time_constant):
+def decay(length: int, time_constant: float) -> Floats:
     return np.exp(-np.arange(length) / RATE / time_constant)
 
 
-def place(parts, total):
+def place(parts: Sequence[tuple[float, Floats]], total: float) -> Floats:
     """[(start in seconds, samples), ...] -> one track of `total` seconds."""
     track = np.zeros(seconds(total))
     for start, samples in parts:
@@ -50,7 +52,7 @@ def place(parts, total):
     return track
 
 
-def notes(midis, note_length, duty=0.25, shape="pulse"):
+def notes(midis: list[int], note_length: float, duty: float = 0.25, shape: str = "pulse") -> Floats:
     """A quick run of notes (an arpeggio), each note_length seconds."""
     parts = []
     for index, midi in enumerate(midis):
@@ -61,7 +63,7 @@ def notes(midis, note_length, duty=0.25, shape="pulse"):
 
 
 # --- the effects ---------------------------------------------------------------------------------------
-def match_strike():
+def match_strike() -> Floats:
     """A scratch, then the flare catching."""
     scratch = noise(seconds(0.08), pitch=1.0) * decay(seconds(0.08), 0.03)
     flare_length = seconds(0.35)
@@ -70,13 +72,13 @@ def match_strike():
     return place([(0, scratch), (0.06, flare * 0.6)], 0.45)
 
 
-def match_out():
+def match_out() -> Floats:
     """A puff: the match going out."""
     length = seconds(0.25)
     return noise(length, pitch=0.25, seed=3) * envelope(length, attack=0.02, decay=0.08, sustain=0.0) * 0.6
 
 
-def door_open():
+def door_open() -> Floats:
     """A creak: a thin pulse wavering down."""
     length = seconds(0.45)
     pitch = sweep(330, 210, length) * (1 + 0.04 * np.sin(np.arange(length) / RATE * 2 * np.pi * 9))
@@ -85,13 +87,13 @@ def door_open():
     return creak * envelope(length, attack=0.03, decay=0.3, sustain=0.3) * 0.5
 
 
-def door_close():
+def door_close() -> Floats:
     """A soft thud as you're through: the triangle dropping."""
     length = seconds(0.2)
     return triangle(sweep(120, 55, length), length) * decay(length, 0.06)
 
 
-def locked():
+def locked() -> Floats:
     """A door that won't open: three rattles of the handle."""
     rattles = [(index * 0.07, noise(seconds(0.03), pitch=0.5, seed=4 + index) * decay(seconds(0.03), 0.01))
                for index in range(3)]
@@ -100,13 +102,13 @@ def locked():
     return place(rattles + [(0.22, clunk)], 0.4)
 
 
-def bump():
+def bump() -> Floats:
     """Walking into a wall: a dull knock."""
     length = seconds(0.09)
     return triangle(sweep(100, 70, length), length) * decay(length, 0.03) * 0.8
 
 
-def stairs(going_up):
+def stairs(going_up: bool) -> Floats:
     """Six steps, each a footfall and a note, climbing - or going down - the scale."""
     scale = [57, 60, 62, 64, 67, 69] if going_up else [69, 67, 64, 62, 60, 57]
     parts = []
@@ -119,33 +121,33 @@ def stairs(going_up):
     return place(parts, 0.75)
 
 
-def pickup_key():
+def pickup_key() -> Floats:
     """A jingle: two bright notes, twice."""
     return notes([84, 88, 84, 88], 0.05, duty=0.125)
 
 
-def pickup_scepter():
+def pickup_scepter() -> Floats:
     """A shimmer up a major chord."""
     return notes([72, 76, 79, 84, 88, 91], 0.045, duty=0.125)
 
 
-def pickup_urn():
+def pickup_urn() -> Floats:
     """A warm, low chord, broken."""
     return notes([60, 64, 67, 72], 0.07, shape="triangle")
 
 
-def drop():
+def drop() -> Floats:
     """Setting something down."""
     length = seconds(0.12)
     return triangle(sweep(180, 90, length), length) * decay(length, 0.04) * 0.8
 
 
-def urn_join():
+def urn_join() -> Floats:
     """Two pieces join: a magical rising run."""
     return notes([67, 71, 74, 79, 83, 86, 91], 0.05, duty=0.125)
 
 
-def urn_whole():
+def urn_whole() -> Floats:
     """The urn is whole: the run, then a ringing chord."""
     run = notes([67, 71, 74, 79, 83, 86, 91, 95], 0.05, duty=0.125)
     chord_length = seconds(0.8)
@@ -153,7 +155,7 @@ def urn_whole():
     return place([(0, run), (0.4, chord * envelope(chord_length, decay=0.3, sustain=0.2))], 1.3)
 
 
-def caught():
+def caught() -> Floats:
     """A scream sliding down, and a crash."""
     length = seconds(0.6)
     scream = pulse(sweep(900, 150, length), length, 0.25) * envelope(length, decay=0.4, sustain=0.3)
@@ -162,7 +164,7 @@ def caught():
     return place([(0, scream * 0.6), (0.05, crash)], 0.7)
 
 
-def thunder():
+def thunder() -> Floats:
     """A long, low rumble."""
     length = seconds(1.4)
     rumble = noise(length, pitch=0.06, seed=30) * envelope(length, attack=0.05, decay=0.5, sustain=0.0)
@@ -170,7 +172,7 @@ def thunder():
     return place([(0, crack * 0.5), (0.02, rumble)], 1.5)
 
 
-def ghost():
+def ghost() -> Floats:
     """Oooo: a slow, wavering moan."""
     length = seconds(0.9)
     pitch = sweep(220, 160, length) * (1 + 0.05 * np.sin(np.arange(length) / RATE * 2 * np.pi * 4))
@@ -179,14 +181,14 @@ def ghost():
     return moan * envelope(length, attack=0.2, decay=0.6, sustain=0.4)
 
 
-def bat():
+def bat() -> Floats:
     """Wings: quick flutters."""
     flaps = [(index * 0.06, noise(seconds(0.03), pitch=0.3, seed=40 + index) * decay(seconds(0.03), 0.01))
              for index in range(6)]
     return place(flaps, 0.4)
 
 
-def tarantula():
+def tarantula() -> Floats:
     """Legs: a dry skitter."""
     click = seconds(0.012)
     clicks = [(index * 0.035, noise(click, pitch=1.0, seed=50 + index) * decay(click, 0.004))
@@ -194,7 +196,7 @@ def tarantula():
     return place(clicks, 0.4)
 
 
-def footstep():
+def footstep() -> Floats:
     """One step on old boards: a soft knock, quiet."""
     length = seconds(0.05)
     knock = triangle(sweep(140, 90, length), length) * decay(length, 0.015)
@@ -209,18 +211,18 @@ EFFECTS = {"match_strike": match_strike, "match_out": match_out, "door_open": do
            "monster_ghost": ghost, "monster_bat": bat, "monster_tarantula": tarantula, "footstep": footstep}
 
 
-def to_pcm(track, level=LEVEL):
+def to_pcm(track: Floats, level: float = LEVEL) -> Samples:
     """One track -> int16 stereo at the effects' level (quieter ones keep their own share)."""
     loudest = max(1e-9, np.abs(track).max())
     scale = level * min(1.0, loudest) / loudest
     return np.repeat((track * scale)[:, None], 2, axis=1).astype(np.int16)
 
 
-def render_all():
+def render_all() -> dict[str, Samples]:
     return {name: to_pcm(make()) for name, make in EFFECTS.items()}
 
 
-def main():
+def main() -> None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = os.path.join(root, "shots", "effects")
     os.makedirs(out, exist_ok=True)

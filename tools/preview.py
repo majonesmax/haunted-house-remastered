@@ -11,6 +11,7 @@ Usage: python tools/preview.py [--look nes] [--pack classic]     -> shots/previe
 import argparse
 import os
 import sys
+from typing import Callable, Iterable
 
 import numpy as np
 from PIL import Image
@@ -22,27 +23,30 @@ sys.path.insert(0, HERE)
 import looks  # noqa: E402
 from game import ram_map as M  # noqa: E402
 from game.state import Game  # noqa: E402
-from looks.base import NO_EXTRAS, Extras  # noqa: E402
+from looks.base import NO_EXTRAS, Extras, FloorLook  # noqa: E402
 from shared import hud  # noqa: E402
+from shared.types import Picture  # noqa: E402
+
+Scene = Callable[[Lab], Extras | None]   # sets up a moment in the lab; returns what the app adds, if anything
 
 ORIGINAL_W, HEIGHT = 320, 240
 LABEL_H = 14
 PER_ROW = 3
 
 
-def park_monsters(lab, keep=()):
+def park_monsters(lab: Lab, keep: Iterable[int] = ()) -> None:
     for monster in range(5):
         if monster not in keep:
             lab.poke(M.MONSTER_FLOOR + monster, (lab.peek(M.FLOOR) + 2) & 3)
 
 
-def run(lab, frames, held=(), keep=()):
+def run(lab: Lab, frames: int, held: Iterable[int] = (), keep: Iterable[int] = ()) -> None:
     for _ in range(frames):
         park_monsters(lab, keep)
         lab.run(1, held)
 
 
-def new_game(lab, game):
+def new_game(lab: Lab, game: int) -> None:
     while lab.peek(M.GAME_NUMBER) != game - 1:
         lab.hold(SELECT, frames=2)
         lab.run(2)
@@ -50,13 +54,13 @@ def new_game(lab, game):
     run(lab, 3)
 
 
-def place_item(lab, item, dx, dy):
+def place_item(lab: Lab, item: int, dx: int, dy: int) -> None:
     lab.poke(M.ITEM_FLOOR + item, lab.peek(M.FLOOR))
     lab.poke(M.ITEM_X + item, lab.peek(M.POS_X) + dx)
     lab.poke(M.ITEM_Y + item, lab.peek(M.POS_Y) + dy)
 
 
-def place_monster(lab, monster, dx, dy):
+def place_monster(lab: Lab, monster: int, dx: int, dy: int) -> None:
     lab.poke(M.MONSTER_FLOOR + monster, lab.peek(M.FLOOR))
     lab.poke(M.MONSTER_ROOM + monster, lab.peek(M.ROOM))
     lab.poke(M.MONSTER_X + monster, lab.peek(M.POS_X) + dx)
@@ -64,22 +68,22 @@ def place_monster(lab, monster, dx, dy):
 
 
 # --- the scenes: each leaves the lab on the frame to draw, and returns what the app adds, if anything -----
-def intro(lab):
+def intro(lab: Lab) -> Extras:
     """At launch: the story (the app shows it until a key is pressed), all of it told."""
     run(lab, 400)
     return Extras(intro=True)
 
 
-def title(lab):
+def title(lab: Lab) -> None:
     lab.hold(SELECT, frames=2)
     run(lab, 2)
 
 
-def game_1_start(lab):
+def game_1_start(lab: Lab) -> None:
     new_game(lab, 1)
 
 
-def game_1_lit(lab):
+def game_1_lit(lab: Lab) -> None:
     new_game(lab, 1)
     place_item(lab, 1, -12, 3)
     place_item(lab, 2, 10, 4)
@@ -87,7 +91,7 @@ def game_1_lit(lab):
     run(lab, 3)
 
 
-def game_1_monsters(lab):
+def game_1_monsters(lab: Lab) -> None:
     new_game(lab, 1)
     lab.poke(M.CARRIED, 1)  # the scepter: so they don't catch the player
     place_monster(lab, 0, -40, 4)
@@ -96,9 +100,9 @@ def game_1_monsters(lab):
     run(lab, 2, keep=(0, 1, 2))
 
 
-def on_floor(number):
+def on_floor(number: int) -> Scene:
     """Game 1 on another floor, a match lit: each floor is its own part of the house."""
-    def scene(lab):
+    def scene(lab: Lab) -> None:
         new_game(lab, 1)
         lab.poke(M.FLOOR, number - 1)
         lab.run_until(lambda lab: lab.peek(M.POS_Y) <= 0x70, held=[JOY_DOWN], limit=40)
@@ -107,25 +111,25 @@ def on_floor(number):
     return scene
 
 
-def game_3_dark(lab):
+def game_3_dark(lab: Lab) -> None:
     new_game(lab, 3)
     run(lab, 2)
 
 
-def distant_lightning(lab):
+def distant_lightning(lab: Lab) -> Extras:
     """The storm outside (shared/storm.py) at a bright moment: the screen lightens, the dark stays dark."""
     game_3_dark(lab)
     return Extras(flash=0.8)
 
 
-def game_3_lit(lab):
+def game_3_lit(lab: Lab) -> None:
     new_game(lab, 3)
     lab.run_until(lambda lab: lab.peek(M.POS_Y) <= 0x64, held=[JOY_DOWN], limit=60)
     run(lab, 2, [BUTTON])
     run(lab, 3)
 
 
-def game_3_stairs(lab):
+def game_3_stairs(lab: Lab) -> None:
     new_game(lab, 3)
     lab.poke(M.CARRIED, 0)  # the key, for the locked door on the way
     lab.run_until(lambda lab: lab.peek(M.POS_X) <= 0x74, held=[JOY_LEFT], limit=60)
@@ -135,14 +139,14 @@ def game_3_stairs(lab):
     run(lab, 3)
 
 
-def game_3_monster_near(lab):
+def game_3_monster_near(lab: Lab) -> None:
     new_game(lab, 3)
     lab.poke(M.CARRIED, 1)
     place_monster(lab, 2, -24, 2)
     run(lab, 2, keep=(2,))
 
 
-def lightning(lab):
+def lightning(lab: Lab) -> None:
     new_game(lab, 3)
     lab.run(5, [LEFT_DIFFICULTY_B])
     lab.poke(M.CARRIED, 1)
@@ -153,7 +157,7 @@ def lightning(lab):
             return
 
 
-def dying(lab):
+def dying(lab: Lab) -> None:
     new_game(lab, 1)
     for _ in range(120):
         place_monster(lab, 1, 0, 0)
@@ -163,7 +167,7 @@ def dying(lab):
     run(lab, 20, keep=(1,))
 
 
-def won(lab):
+def won(lab: Lab) -> None:
     new_game(lab, 1)
     lab.poke(M.CARRIED, 2)
     for offset, shape in enumerate((8, 0xFF, 0xFF)):
@@ -172,13 +176,13 @@ def won(lab):
     run(lab, 20)
 
 
-def escaped(lab):
+def escaped(lab: Lab) -> None:
     """After the win, back at game select: the ending."""
     won(lab)
     run(lab, 300)
 
 
-def game_over(lab, holding_urn=False):
+def game_over(lab: Lab, holding_urn: bool = False) -> None:
     new_game(lab, 1)
     lab.poke(M.LIVES, 1)
     if holding_urn:   # the whole urn found, but the last life lost before the front door: still game over
@@ -193,7 +197,8 @@ def game_over(lab, holding_urn=False):
     run(lab, 300)
 
 
-SCENES = [("intro", intro), ("title", title), ("game 1", game_1_start), ("game 1, match lit", game_1_lit),
+SCENES: list[tuple[str, Scene]] = [
+          ("intro", intro), ("title", title), ("game 1", game_1_start), ("game 1, match lit", game_1_lit),
           ("game 1, monsters", game_1_monsters), ("floor 2", on_floor(2)), ("floor 3", on_floor(3)),
           ("floor 4", on_floor(4)), ("game 3, dark", game_3_dark), ("distant lightning", distant_lightning),
           ("game 3, match lit", game_3_lit), ("game 3, stairs", game_3_stairs),
@@ -204,7 +209,7 @@ SETTLE = {"won": 200, "escaped": 170, "game over": 240,   # endings play out: fr
           "game over, urn in hand": 240}
 
 
-def draw_scene(look, game, lab, label, scene):
+def draw_scene(look: FloorLook, game: Game, lab: Lab, label: str, scene: Scene) -> Picture:
     """Set up a scene and draw it. An ending is shown some way in (SETTLE): the look is first shown it
     that many frames earlier."""
     extras = scene(lab) or NO_EXTRAS
@@ -214,9 +219,9 @@ def draw_scene(look, game, lab, label, scene):
     return look.draw(state, lab.frame_count, extras)
 
 
-def render(look, game, lab, label, scene):
+def render(look: FloorLook, game: Game, lab: Lab, label: str, scene: Scene) -> Picture:
     remaster = draw_scene(look, game, lab, label, scene)
-    original = np.array(Image.fromarray(lab.picture()).resize((ORIGINAL_W, HEIGHT), Image.NEAREST))
+    original = np.array(Image.fromarray(lab.picture()).resize((ORIGINAL_W, HEIGHT), Image.Resampling.NEAREST))
     tile = np.zeros((HEIGHT + LABEL_H, remaster.shape[1] + 4 + ORIGINAL_W, 3), np.uint8)
     tile[LABEL_H:, :remaster.shape[1]] = remaster
     tile[LABEL_H:, remaster.shape[1] + 4:] = original
@@ -230,7 +235,7 @@ STRIP_SCALE = 3
 CELL = 20 * STRIP_SCALE
 
 
-def facing_strip(look, width):
+def facing_strip(look: FloorLook, width: int) -> Picture:
     """Every monster (a row each) in every facing, its first three frames, at STRIP_SCALE times size."""
     height = LABEL_H + len(MONSTERS) * CELL
     strip = np.zeros((height, width, 3), np.uint8)
@@ -251,7 +256,7 @@ def facing_strip(look, width):
     return strip
 
 
-def sheet(tiles):
+def sheet(tiles: list[Picture]) -> Picture:
     rows = []
     for start in range(0, len(tiles), PER_ROW):
         row = tiles[start:start + PER_ROW]
@@ -261,7 +266,7 @@ def sheet(tiles):
     return np.concatenate(rows, axis=0)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--look", default="nes")
     parser.add_argument("--pack")

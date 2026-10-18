@@ -17,7 +17,9 @@ import numpy as np
 from PIL import Image
 
 from content import original
+from content.original import NamedFrames
 from game import paths
+from shared.types import Picture
 
 FOLDERS = (paths.PACKS, paths.USER_PACKS)
 
@@ -25,27 +27,35 @@ FOLDERS = (paths.PACKS, paths.USER_PACKS)
 class Pictures:
     """Named pictures, each a list of frames (RGBA arrays); a name the pack lacks comes from `fallback`."""
 
-    def __init__(self, folder, fallback):
-        self.frames = read_folder(folder)
-        self.fallback = fallback
+    def __init__(self, folder: str, fallback: NamedFrames):
+        self.frames: NamedFrames = read_folder(folder)
+        self.fallback: NamedFrames = fallback
 
-    def get(self, name):
+    def get(self, name: str) -> list[Picture] | None:
         """The frames for `name`: the pack's own, else the fallback's, else None."""
         if name in self.frames:
             return self.frames[name]
         return self.fallback.get(name)
 
-    def frame(self, name, count):
+    def must(self, name: str) -> list[Picture]:
+        """The frames for a name that's known to be there (one from names(), or one every world has - the
+        original has them all)."""
+        frames = self.get(name)
+        if not frames:
+            raise KeyError(f"no picture called {name!r}")
+        return frames
+
+    def frame(self, name: str, count: int) -> Picture | None:
         """Frame `count` of `name`, cycling through its frames."""
         frames = self.get(name)
         if not frames:
             return None
         return frames[count % len(frames)]
 
-    def own(self, name):
+    def own(self, name: str) -> bool:
         return name in self.frames
 
-    def names(self):
+    def names(self) -> list[str]:
         """Every picture name there is: the pack's own and the fallback's."""
         return sorted(set(self.frames) | set(self.fallback))
 
@@ -54,21 +64,21 @@ class Pack:
     """A pack: .cast and .world (Pictures), and .info - its pack.json: "title", "description", and "floors",
     a name for each of the four floors. Its soundtrack, if it has one, is music.json in .folder."""
 
-    def __init__(self, folder, rom):
+    def __init__(self, folder: str, rom: bytes):
         with open(os.path.join(folder, "pack.json")) as about:
             info = json.load(about)
-        self.name = os.path.basename(folder)
-        self.folder = folder
-        self.info = info
-        self.title = info.get("title", self.name)
+        self.name: str = os.path.basename(folder)
+        self.folder: str = folder
+        self.info: dict = info
+        self.title: str = info.get("title", self.name)
         self.cast = Pictures(os.path.join(folder, "cast"), original.cast(rom))
         self.world = Pictures(os.path.join(folder, "world"), original.world(rom))
 
 
-def read_folder(folder):
+def read_folder(folder: str) -> NamedFrames:
     """PNG files -> {name: [frames]}: "ghost_0.png", "ghost_1.png" -> "ghost": [two frames]. A file
     without a frame number ("front_door.png") is a single frame."""
-    frames = {}
+    frames: NamedFrames = {}
     if not os.path.isdir(folder):
         return frames
     for file_name in sorted(os.listdir(folder)):
@@ -83,7 +93,7 @@ def read_folder(folder):
     return frames
 
 
-def names():
+def names() -> list[str]:
     found = []
     for folder in FOLDERS:
         if os.path.isdir(folder):
@@ -93,7 +103,7 @@ def names():
     return found
 
 
-def load(name, rom):
+def load(name: str, rom: bytes) -> Pack:
     for folder in FOLDERS:
         path = os.path.join(folder, name)
         if os.path.isfile(os.path.join(path, "pack.json")):

@@ -5,13 +5,14 @@
 """
 
 import content
+from looks.base import FloorLook
 from looks.nes.look import NesLook
 from looks.snes.look import SnesLook
 
 LOOKS = {"nes": NesLook, "snes": SnesLook}
 
 
-def make(platform, rom, pack_name=None):
+def make(platform: str, rom: bytes, pack_name: str | None = None) -> FloorLook:
     look_class = LOOKS[platform]
     pack = content.load(pack_name or look_class.pack_name, rom)
     return look_class(pack, rom)

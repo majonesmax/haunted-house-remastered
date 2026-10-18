@@ -8,9 +8,15 @@ ceiling, bevelled panels and stone blocks, veined marble, grained wood.
     4  The Attic          bare planks; rough, knotted boards
 """
 
+from typing import Any
+
 import numpy as np
 
 from paint import art, bevel, brightness, ramp, repeat, shades, solid, speckle
+from shared.types import Picture, Rgb
+
+Pictures = dict[str, Picture]   # picture name -> the picture, before it's saved as <name>.png
+ArtData = dict[str, Any]        # a floor's or a decoration's description, as written in FLOORS below
 
 CELL_W, CELL_H, FACE_H = 24, 32, 20
 PAPER_H = 12
@@ -118,7 +124,7 @@ FLOORS = [
 
 
 # --- the wall's face -------------------------------------------------------------------------------------
-def face(floor):
+def face(floor: ArtData) -> Picture:
     """Paper (darkening toward the ceiling), a gilded rail, bevelled wainscot panels, the skirting."""
     motif, colours = floor["paper"]
     paper = art(repeat(motif, CELL_W, PAPER_H), {"b": colours[1], "p": colours[0], "P": colours[3],
@@ -135,7 +141,7 @@ def face(floor):
     return np.concatenate([paper, rail, wainscot, skirting])
 
 
-def wainscot_panels(colours):
+def wainscot_panels(colours: list[Rgb]) -> Picture:
     """Two raised panels, 12 x 4, in the wainscot's middle shade."""
     panels = solid(4, CELL_W, colours[2])
     for left in (0, 12):
@@ -144,7 +150,7 @@ def wainscot_panels(colours):
 
 
 # --- the wall's top ---------------------------------------------------------------------------------------
-def top(floor):
+def top(floor: ArtData) -> Picture:
     """Stone blocks, each bevelled, in two offset courses, with a little texture."""
     colours = floor["stone"]
     picture = solid(CELL_H, CELL_W, colours[1])
@@ -159,7 +165,7 @@ def top(floor):
 
 
 # --- the floors ---------------------------------------------------------------------------------------------
-def marble():
+def marble() -> Picture:
     """Black and white squares (12 x 16), each with a vein and a sheen in its top corner."""
     light, dark = ramp((150, 150, 160), (235, 235, 245), 4), ramp((26, 26, 34), (90, 90, 104), 4)
     picture = solid(CELL_H, CELL_W, light[2])
@@ -175,13 +181,13 @@ def marble():
     return picture
 
 
-def parquet():
+def parquet() -> Picture:
     colours = WOOD
     return art(repeat(HERRINGBONE, CELL_W, CELL_H), {"l": colours[3], "m": colours[2], "d": colours[0],
                                                     "D": colours[1]})
 
 
-def terracotta():
+def terracotta() -> Picture:
     """Tiles 12 x 8, each a little different, in grout."""
     colours = ramp((90, 34, 14), (210, 110, 60), 5)
     picture = solid(CELL_H, CELL_W, colours[0])
@@ -195,7 +201,7 @@ def terracotta():
     return picture
 
 
-def boards():
+def boards() -> Picture:
     colours = ramp((40, 24, 10), (150, 100, 50), 5)
     picture = art(repeat(BOARDS, CELL_W, CELL_H), {"m": colours[2], "l": colours[3], "d": colours[0],
                                                    "k": colours[1]})
@@ -414,11 +420,11 @@ LLLLLLLccLLLLLLLLlll
 MOON_COLOURS = {"L": (250, 245, 210), "l": (200, 195, 170), "c": (190, 185, 150)}
 
 
-def world_pictures():
-    pictures = {"front_door": art(FRONT_DOOR, {"K": (14, 8, 6), "D": WOOD[0], "w": WOOD[2], "l": WOOD[3],
-                                               "Y": GOLD[3]}),
-                "title_mansion": art(TITLE_MANSION, TITLE_MANSION_COLOURS),
-                "title_moon": art(MOON, MOON_COLOURS)}
+def world_pictures() -> Pictures:
+    door_colours = {"K": (14, 8, 6), "D": WOOD[0], "w": WOOD[2], "l": WOOD[3], "Y": GOLD[3]}
+    pictures: Pictures = {"front_door": art(FRONT_DOOR, door_colours),
+                          "title_mansion": art(TITLE_MANSION, TITLE_MANSION_COLOURS),
+                          "title_moon": art(MOON, MOON_COLOURS)}
     for number, floor in enumerate(FLOORS, start=1):
         pictures[f"floor{number}"] = FLOOR_PICTURES[floor["floor"]]()
         pictures[f"wall{number}_top"] = top(floor)
@@ -429,7 +435,7 @@ def world_pictures():
     return pictures
 
 
-def decoration_pictures(number, decoration):
+def decoration_pictures(number: int, decoration: ArtData) -> Pictures:
     """A decoration's pictures, named for looks/scenery.py: frames that flicker, eyes that follow, a
     lightning version."""
     name = f"decor{number}_{decoration['kind']}"
@@ -444,7 +450,7 @@ def decoration_pictures(number, decoration):
     return pictures
 
 
-def with_pupils(text, look):
+def with_pupils(text: str, look: str) -> str:
     """The portrait with its pupils (K) placed in the eye whites, looking one way."""
     rows = [list(row) for row in text.strip("\n").split("\n")]
     for eye_row, eye_column in EYE_WHITES:

@@ -8,6 +8,7 @@ Usage: python tests/test_events.py        (exit code 1 if a check fails)
 
 import os
 import sys
+from typing import Callable, Iterable
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(HERE, "tools"))
@@ -18,11 +19,11 @@ from lab import BUTTON, JOY_DOWN, JOY_LEFT, JOY_RIGHT, JOY_UP, LEFT_DIFFICULTY_B
 from music.events import EventWatcher  # noqa: E402
 
 game = Game()
-failures = []
+failures: list[str] = []
 SCEPTER, KEY = 1, 0
 
 
-def check(claim, passed, detail=""):
+def check(claim: str, passed: bool, detail: object = "") -> None:
     print(f"{'PASS' if passed else 'FAIL'}  {claim}" + (f"   [{detail}]" if detail else ""))
     if not passed:
         failures.append(claim)
@@ -31,11 +32,12 @@ def check(claim, passed, detail=""):
 class Scene:
     """The lab, with every frame's state fed to an EventWatcher; .heard is every event so far."""
 
-    def __init__(self, lab):
-        self.lab, self.watcher, self.heard = lab, EventWatcher(), []
-        self.keep = ()
+    def __init__(self, lab: Lab):
+        self.lab, self.watcher = lab, EventWatcher()
+        self.heard: list[str] = []
+        self.keep: tuple[int, ...] = ()   # monsters left where they are (the rest go to another floor)
 
-    def frame(self, held=()):
+    def frame(self, held: Iterable[int] = ()) -> None:
         far = (self.lab.peek(M.FLOOR) + 2) & 3
         for monster in range(5):
             if monster not in self.keep:
@@ -43,21 +45,21 @@ class Scene:
         self.lab.run(1, held)
         self.heard += self.watcher.update(game.state(self.lab.ram))
 
-    def run(self, frames, held=()):
+    def run(self, frames: int, held: Iterable[int] = ()) -> None:
         for _ in range(frames):
             self.frame(held)
 
-    def walk_until(self, button, test, limit=300):
+    def walk_until(self, button: int, test: Callable[[Lab], bool], limit: int = 300) -> None:
         for _ in range(limit):
             if test(self.lab):
                 return
             self.frame([button])
 
-    def count(self, name):
+    def count(self, name: str) -> int:
         return self.heard.count(name)
 
 
-def new_game(lab, number):
+def new_game(lab: Lab, number: int) -> Scene:
     while lab.peek(M.GAME_NUMBER) != number - 1:
         lab.hold(SELECT, frames=2)
         lab.run(2)
@@ -69,7 +71,7 @@ def new_game(lab, number):
     return scene
 
 
-def matches(lab):
+def matches(lab: Lab) -> None:
     scene = new_game(lab, 1)
     scene.run(2, [BUTTON])
     scene.run(3)
@@ -79,7 +81,7 @@ def matches(lab):
     check("the match going out: match_out", scene.count("match_out") == 1, scene.heard)
 
 
-def doors_and_stairs(lab):
+def doors_and_stairs(lab: Lab) -> None:
     scene = new_game(lab, 1)
     scene.walk_until(JOY_LEFT, lambda lab: lab.peek(M.POS_X) <= 0x74)
     scene.walk_until(JOY_DOWN, lambda lab: lab.peek(M.ROOM) == 0)
@@ -94,7 +96,7 @@ def doors_and_stairs(lab):
     check("down the stairs: stairs_down", scene.count("stairs_down") == 1, scene.heard[-3:])
 
 
-def walls_and_locks(lab):
+def walls_and_locks(lab: Lab) -> None:
     scene = new_game(lab, 1)
     scene.run(90, [JOY_UP])
     check("walking into a wall: bump", "bump" in scene.heard, scene.heard[-4:])
@@ -108,13 +110,13 @@ def walls_and_locks(lab):
     check("a locked door (game 3): locked", "locked" in scene.heard, scene.heard[-4:])
 
 
-def place_item(lab, item, dx, dy):
+def place_item(lab: Lab, item: int, dx: int, dy: int) -> None:
     lab.poke(M.ITEM_FLOOR + item, lab.peek(M.FLOOR))
     lab.poke(M.ITEM_X + item, lab.peek(M.POS_X) + dx)
     lab.poke(M.ITEM_Y + item, lab.peek(M.POS_Y) + dy)
 
 
-def items(lab):
+def items(lab: Lab) -> None:
     scene = new_game(lab, 3)
     place_item(lab, KEY, 6, -2)
     scene.run(2, [BUTTON])
@@ -136,12 +138,12 @@ def items(lab):
     check("the urn whole: urn_whole", scene.count("urn_whole") == 1, scene.heard)
 
 
-def put_monster_here(lab, monster):
+def put_monster_here(lab: Lab, monster: int) -> None:
     lab.poke(M.MONSTER_FLOOR + monster, lab.peek(M.FLOOR))
     lab.poke(M.MONSTER_ROOM + monster, lab.peek(M.ROOM))
 
 
-def monsters(lab):
+def monsters(lab: Lab) -> None:
     scene = new_game(lab, 1)
     lab.poke(M.CARRIED, SCEPTER)
     scene.run(1)
@@ -162,7 +164,7 @@ def monsters(lab):
     check("caught: caught", "caught" in scene.heard, scene.heard)
 
 
-def bat_steals(lab):
+def bat_steals(lab: Lab) -> None:
     scene = new_game(lab, 7)
     lab.poke(M.CARRIED, KEY)
     scene.keep = (1,)
@@ -178,7 +180,7 @@ def bat_steals(lab):
     check("the bat taking the key makes no 'drop'", stolen and "drop" not in scene.heard, scene.heard)
 
 
-def lightning(lab):
+def lightning(lab: Lab) -> None:
     scene = new_game(lab, 3)
     lab.run(5, [LEFT_DIFFICULTY_B])
     lab.poke(M.CARRIED, SCEPTER)
@@ -193,14 +195,14 @@ def lightning(lab):
           f"{flashes} flash frames, {thunders} thunders")
 
 
-def title_is_quiet(lab):
+def title_is_quiet(lab: Lab) -> None:
     scene = Scene(lab)
     lab.hold(SELECT, frames=2)
     scene.run(120)
     check("nothing on the title screen", scene.heard == [], scene.heard)
 
 
-def main():
+def main() -> int:
     lab = Lab()
     start = lab.save()
     for test in (matches, doors_and_stairs, walls_and_locks, items, monsters, bat_steals, lightning,

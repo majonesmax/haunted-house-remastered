@@ -19,6 +19,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 from shared.pixelart import blit  # noqa: E402
+from shared.types import Picture  # noqa: E402
 
 PACKAGE = os.path.join(ROOT, "package")
 CAST = os.path.join(ROOT, "packs", "nocturne", "cast")
@@ -29,11 +30,11 @@ CORNER = 5                       # the rounded square's corner radius, in icon p
 ICNS_SIZES = (16, 32, 64, 128, 256, 512, 1024)
 
 
-def cast(name):
+def cast(name: str) -> Picture:
     return np.array(Image.open(os.path.join(CAST, f"{name}.png")).convert("RGBA"))
 
 
-def icon():
+def icon() -> Picture:
     """The 32 x 32 icon, RGBA."""
     picture = np.zeros((SIZE, SIZE, 4), np.uint8)
     flame_x, flame_y = 24, 12
@@ -49,7 +50,7 @@ def icon():
     return picture
 
 
-def rounded_square():
+def rounded_square() -> Picture:
     """255 inside a square with rounded corners, 0 outside."""
     rows, columns = np.mgrid[:SIZE, :SIZE] + 0.5
     nearest_x = np.clip(columns, CORNER, SIZE - CORNER)
@@ -58,11 +59,11 @@ def rounded_square():
     return np.where(inside, 255, 0).astype(np.uint8)
 
 
-def scaled(picture, size):
-    return Image.fromarray(picture, "RGBA").resize((size, size), Image.NEAREST)
+def scaled(picture: Picture, size: int) -> Image.Image:
+    return Image.fromarray(picture, "RGBA").resize((size, size), Image.Resampling.NEAREST)
 
 
-def main():
+def main() -> None:
     picture = icon()
     preview = os.path.join(PACKAGE, "icon_preview.png")
     scaled(picture, 1024).save(preview)

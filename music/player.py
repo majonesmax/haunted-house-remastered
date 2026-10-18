@@ -17,7 +17,10 @@ import threading
 
 import numpy as np
 
+from game.state import GameState
 from music import chiptune, orchestra
+from music.chiptune import Song
+from shared.types import Samples
 
 SYNTHS = {"chiptune": chiptune, "orchestra": orchestra}   # a look's sound chip (Look.synth) -> its synth
 
@@ -25,7 +28,7 @@ CALM_FRAMES = 120   # the tension music keeps on this long after the last monste
 KNEE, TOP = 28000.0, 32767.0  # mixing: above the knee, peaks are rounded off instead of clipping
 
 
-def moment(state, intro=False):
+def moment(state: GameState, intro: bool = False) -> str:
     """Which piece belongs to this moment of the game (intro: the story is showing)."""
     if intro:
         return "story"
@@ -43,10 +46,10 @@ def moment(state, intro=False):
 class Piece:
     """A rendered song, played from memory: loops, or plays once."""
 
-    def __init__(self, samples, loop):
+    def __init__(self, samples: Samples, loop: bool):
         self.samples, self.loop, self.position = samples, loop, 0
 
-    def render(self, count):
+    def render(self, count: int) -> Samples:
         out = np.zeros((count, 2), np.int16)
         done = 0
         while done < count:
@@ -61,7 +64,7 @@ class Piece:
         return out
 
     @property
-    def finished(self):
+    def finished(self) -> bool:
         return not self.loop and self.position >= len(self.samples)
 
 
@@ -71,22 +74,22 @@ class MusicPlayer:
     The songs are rendered in the background, the title and first floor first, so making a player costs
     nothing; a piece that isn't ready yet starts as soon as it is."""
 
-    def __init__(self, songs, synth="chiptune"):
+    def __init__(self, songs: dict[str, Song], synth: str = "chiptune"):
         self.songs = songs
         self.synth = SYNTHS[synth]
         self.synth_name = synth
-        self.rendered = {}       # name -> its samples, as the background renders them
-        self.loops = {}          # name -> its Piece, kept so it resumes where it was
+        self.rendered: dict[str, Samples] = {}   # name -> its samples, as the background renders them
+        self.loops: dict[str, Piece] = {}        # name -> its Piece, kept so it resumes where it was
         self.lock = threading.Lock()
-        self.current = None
-        self.playing = None
+        self.current: Piece | None = None
+        self.playing: str | None = None
         self.calm_for = 0
         self.on = True
         self.paused = False      # the window's pause: the music waits too
         self.waiting = False     # the piece wanted isn't rendered yet
         threading.Thread(target=self.render_all, daemon=True).start()
 
-    def render_all(self):
+    def render_all(self) -> None:
         """In the background: every song, those heard first first."""
         first = [name for name in ("story", "title", "floor1") if name in self.songs]
         rest = [name for name in self.songs if name not in first]
@@ -94,16 +97,16 @@ class MusicPlayer:
             self.rendered[name] = self.synth.render(self.songs[name])
 
     @property
-    def ready(self):
+    def ready(self) -> bool:
         return len(self.rendered) == len(self.songs)
 
     @property
-    def silent(self):
+    def silent(self) -> bool:
         """Is no music playing: switched off, no song for this moment, or a jingle that's over?"""
         piece = self.current
         return not self.on or piece is None or piece.finished
 
-    def follow(self, state, intro=False):
+    def follow(self, state: GameState, intro: bool = False) -> None:
         """Called once a frame: switch pieces when the moment changes."""
         wanted = moment(state, intro)
         if self.playing == "tension" and wanted.startswith("floor"):
@@ -114,7 +117,7 @@ class MusicPlayer:
         if wanted != self.playing or (self.waiting and wanted in self.rendered):
             self.play(wanted)
 
-    def play(self, name):
+    def play(self, name: str) -> None:
         self.playing = name
         self.waiting = name in self.songs and name not in self.rendered
         piece = None
@@ -127,11 +130,11 @@ class MusicPlayer:
         with self.lock:
             self.current = piece
 
-    def toggle(self):
+    def toggle(self) -> bool:
         self.on = not self.on
         return self.on
 
-    def mixer(self, game_sound):
+    def mixer(self, game_sound: Samples) -> Samples:
         """The sound card's callback: the game's sound plus the music."""
         if not self.on or self.paused or self.current is None:
             return game_sound
@@ -140,7 +143,7 @@ class MusicPlayer:
         return mix(game_sound, music)
 
 
-def mix(game_sound, music):
+def mix(game_sound: Samples, music: Samples) -> Samples:
     """Add the two in float; round off the rare peaks where both are loud, instead of clipping."""
     mixed = game_sound.astype(np.float32) + music.astype(np.float32)
     over = np.abs(mixed) > KNEE

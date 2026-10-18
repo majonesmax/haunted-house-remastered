@@ -21,7 +21,7 @@ REMEMBERED = os.path.join(paths.USER_DIR, "haunted_house.a26") if paths.FROZEN e
 WINDOW = (640, 360)
 
 
-def check(path):
+def check(path: str) -> str | None:
     """None if `path` looks like Haunted House, else what's wrong with it."""
     if not os.path.isfile(path):
         return "That isn't a file."
@@ -30,13 +30,13 @@ def check(path):
     return None
 
 
-def is_known(path):
+def is_known(path: str) -> bool:
     """Is it the exact cartridge the remaster was worked out on? (Others may still play.)"""
     with open(path, "rb") as rom_file:
         return hashlib.md5(rom_file.read()).hexdigest() == KNOWN_MD5
 
 
-def remember(path):
+def remember(path: str) -> str:
     """Keep a copy in the player's folder, so it's found next time."""
     if os.path.abspath(path) != os.path.abspath(REMEMBERED):
         os.makedirs(os.path.dirname(REMEMBERED), exist_ok=True)
@@ -44,7 +44,7 @@ def remember(path):
     return REMEMBERED
 
 
-def find_rom(given=None):
+def find_rom(given: str | None = None) -> str | None:
     """The ROM's path, or None if the player closes the window without giving one."""
     if given:
         problem = check(given)
@@ -58,13 +58,13 @@ def find_rom(given=None):
     return ask()
 
 
-def ask():
+def ask() -> str | None:
     """A window that waits for the ROM to be dragged onto it. Esc, or closing it, gives up."""
     pygame.display.init()
     pygame.font.init()
     screen = pygame.display.set_mode(WINDOW)
     pygame.display.set_caption(f"{paths.APP_NAME} - your ROM, please")
-    problem = None
+    problem: str | None = None
     clock = pygame.time.Clock()
     while True:
         for event in pygame.event.get():
@@ -81,7 +81,7 @@ def ask():
         clock.tick(30)
 
 
-def draw_ask(screen, problem):
+def draw_ask(screen: pygame.Surface, problem: str | None) -> None:
     big, small = mono(22, bold=True), mono(15)
     lines = [(big, "Drop your Haunted House ROM here", (240, 200, 80)), (small, "", None),
              (small, "Atari 2600 Haunted House (1982): a 4 KB .a26 or .bin file.", (220, 220, 235)),

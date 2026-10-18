@@ -9,15 +9,38 @@ carried, every item and monster - so a look never needs to know a RAM address. W
     state = game.state(core.ram)   # every frame: a snapshot of the RAM, decoded
 """
 
-from collections import namedtuple
+from typing import NamedTuple
 
 from game import palette as P
 from game import ram_map as M
 from game import rom as R
+from shared.types import Point, RamBytes, Rgb
 
-Item = namedtuple("Item", "number floor x y shape")
-Monster = namedtuple("Monster", "number floor room x y heading following")
-Stairs = namedtuple("Stairs", "edge going_up x y")
+
+class Item(NamedTuple):
+    number: int       # 0 the master key, 1 the scepter, 2-4 the urn's pieces
+    floor: int        # 0-3
+    x: int
+    y: int
+    shape: int        # urn pieces: 2-4 one piece, 5-7 two joined, 8 whole, 0xFF joined into another
+
+
+class Monster(NamedTuple):
+    number: int       # 0 the ghost, 1 the bat, 2-4 tarantulas
+    floor: int
+    room: int
+    x: int
+    y: int
+    heading: str      # "left" / "right" / "up" / "down": where it's walking
+    following: bool   # sent after the player
+
+
+class Stairs(NamedTuple):
+    edge: str         # "left" / "right" / "top" / "bottom"
+    going_up: bool
+    x: int
+    y: int
+
 
 ITEM_KINDS = ("key", "scepter", "urn", "urn", "urn")
 MONSTER_KINDS = ("ghost", "bat", "tarantula", "tarantula", "tarantula")
@@ -58,38 +81,39 @@ class GameState:
                     (game/visibility.py). False unless the window turns it on.
     """
 
-    def __init__(self, ram, rom, palette):
-        self.ram = ram
-        self.lights_on = False
-        self.mode = MODES.get(self.byte(M.GAME_STATE), "playing")
-        self.game = min(self.byte(M.GAME_NUMBER), 8) + 1
-        self.floor = self.byte(M.FLOOR) & 3
-        self.room = self.byte(M.ROOM) % R.ROOM_COUNT
+    def __init__(self, ram: bytes, rom: bytes, palette: dict[int, Rgb]):
+        self.ram: bytes = ram
+        self.lights_on: bool = False
+        self.mode: str = MODES.get(self.byte(M.GAME_STATE), "playing")
+        self.game: int = min(self.byte(M.GAME_NUMBER), 8) + 1
+        self.floor: int = self.byte(M.FLOOR) & 3
+        self.room: int = self.byte(M.ROOM) % R.ROOM_COUNT
         beyond = self.byte(0x97)
-        self.room_beyond = beyond if beyond < R.ROOM_COUNT else None
-        self.player = (self.byte(M.POS_X), self.byte(M.POS_Y))
-        self.view_bottom = self.player[1] - self.byte(0xCB)
-        self.clock = self.byte(M.CLOCK)
-        self.looking = self.read_looking(rom)
-        self.match_lit = bool(self.byte(M.FLAGS) & 0x40)
-        self.match_seconds = self.byte(M.MATCH_TIME) if self.match_lit else 0
-        self.matches_used = from_bcd(self.byte(M.MATCHES_USED))
-        self.lives = self.byte(M.LIVES)
+        self.room_beyond: int | None = beyond if beyond < R.ROOM_COUNT else None
+        self.player: Point = (self.byte(M.POS_X), self.byte(M.POS_Y))
+        self.view_bottom: int = self.player[1] - self.byte(0xCB)
+        self.clock: int = self.byte(M.CLOCK)
+        self.looking: Point = self.read_looking(rom)
+        self.match_lit: bool = bool(self.byte(M.FLAGS) & 0x40)
+        self.match_seconds: int = self.byte(M.MATCH_TIME) if self.match_lit else 0
+        self.matches_used: int = from_bcd(self.byte(M.MATCHES_USED))
+        self.lives: int = self.byte(M.LIVES)
         carried = self.byte(M.CARRIED)
-        self.carried = carried if carried < 5 else None
-        self.items = [self.read_item(number) for number in range(5)]
-        self.monsters = [self.read_monster(number) for number in range(self.byte(M.LAST_MONSTER) + 1)]
-        self.monsters_here = self.byte(M.MONSTERS_HERE)
-        self.stairs = self.read_stairs(rom)
-        self.room_limits = (self.byte(0x8C), self.byte(0x8B) or 0xFF)
-        self.lightning = self.byte(0xF5) == palette_entry(rom, LIGHTNING_COLOUR)
-        self.killed_by = self.byte(M.KILLED_BY) if self.mode == "dying" else None
-        self.sound = self.byte(0x93)
+        self.carried: int | None = carried if carried < 5 else None
+        self.items: list[Item] = [self.read_item(number) for number in range(5)]
+        last_monster = self.byte(M.LAST_MONSTER)
+        self.monsters: list[Monster] = [self.read_monster(number) for number in range(last_monster + 1)]
+        self.monsters_here: int = self.byte(M.MONSTERS_HERE)
+        self.stairs: Stairs | None = self.read_stairs(rom)
+        self.room_limits: tuple[int, int] = (self.byte(0x8C), self.byte(0x8B) or 0xFF)
+        self.lightning: bool = self.byte(0xF5) == palette_entry(rom, LIGHTNING_COLOUR)
+        self.killed_by: int | None = self.byte(M.KILLED_BY) if self.mode == "dying" else None
+        self.sound: int = self.byte(0x93)
 
-    def byte(self, address):
+    def byte(self, address: int) -> int:
         return int(self.ram[address - 0x80])
 
-    def read_looking(self, rom):
+    def read_looking(self, rom: bytes) -> Point:
         """Which way the eyes look: the joystick ($8E), or while dying the game's own fake readings."""
         if self.mode == "dying":
             fake = R.byte_at(rom, DYING_EYES + (self.clock >> 1 & 7))
@@ -100,19 +124,19 @@ class GameState:
         dy = (1 if pushed & 0x10 else 0) - (1 if pushed & 0x20 else 0)
         return dx, dy
 
-    def read_item(self, number):
+    def read_item(self, number: int) -> Item:
         shape = self.byte(M.URN_SHAPES + number - 2) if number >= 2 else number
         return Item(number, self.byte(M.ITEM_FLOOR + number), self.byte(M.ITEM_X + number),
                     self.byte(M.ITEM_Y + number), shape)
 
-    def read_monster(self, number):
+    def read_monster(self, number: int) -> Monster:
         plan = self.byte(M.MONSTER_ROUTE + number)
         following = bool(self.byte(0x94) & 1 << number)
         return Monster(number, self.byte(M.MONSTER_FLOOR + number), self.byte(M.MONSTER_ROOM + number),
                        self.byte(M.MONSTER_X + number), self.byte(M.MONSTER_Y + number),
                        DIRECTIONS[plan >> 6], following)
 
-    def read_stairs(self, rom):
+    def read_stairs(self, rom: bytes) -> Stairs | None:
         stairs_byte = self.byte(0x9B) & 0x0F
         if stairs_byte == NO_STAIRS:
             return None
@@ -122,11 +146,11 @@ class GameState:
         return Stairs(R.EDGES[edge], bool(stairs_byte & 4), x, y)
 
     @property
-    def won(self):
+    def won(self) -> bool:
         return self.mode == "won"
 
     @property
-    def escaped(self):
+    def escaped(self) -> bool:
         """Back at game select after a win: the game leaves the whole urn in your hands until a new game
         starts (a new game, or game select at launch, starts with nothing held). Losing the last life
         while holding it ends the same way - at game select, urn in hand - but with no lives left."""
@@ -135,36 +159,36 @@ class GameState:
         return self.items[self.carried].shape == WHOLE_URN
 
     @property
-    def dark(self):
+    def dark(self) -> bool:
         """Games 2-9: the walls can't be seen (except by lightning)."""
         return self.game > 1
 
-    def kind(self, thing):
+    def kind(self, thing: Item | Monster) -> str:
         """"key", "scepter", "urn", "ghost", "bat" or "tarantula"."""
         if isinstance(thing, Item):
             return ITEM_KINDS[thing.number]
         return MONSTER_KINDS[thing.number]
 
 
-def from_bcd(value):
+def from_bcd(value: int) -> int:
     return (value >> 4) * 10 + (value & 0x0F)
 
 
-def palette_entry(rom, index):
+def palette_entry(rom: bytes, index: int) -> int:
     return R.table(rom, "COLOURS")[index]
 
 
 class Game:
     """What the ROM says - read once: its tables and the 2600 palette."""
 
-    def __init__(self, rom_path=R.DEFAULT_ROM):
-        self.rom = R.load(rom_path)
-        self.palette = P.load()
+    def __init__(self, rom_path: str = R.DEFAULT_ROM):
+        self.rom: bytes = R.load(rom_path)
+        self.palette: dict[int, Rgb] = P.load()
 
-    def state(self, ram):
+    def state(self, ram: RamBytes) -> GameState:
         """A GameState from the 128 RAM bytes (copied - the emulator's RAM is live)."""
         return GameState(bytes(ram), self.rom, self.palette)
 
-    def rgb(self, colour):
+    def rgb(self, colour: int) -> Rgb:
         """A 2600 colour byte -> (r, g, b) as the Stella core shows it."""
         return P.rgb(self.palette, colour)

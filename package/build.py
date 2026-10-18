@@ -40,7 +40,7 @@ PROCESSORS = {"x86_64": "x64", "amd64": "x64", "arm64": "arm64", "aarch64": "arm
 ICO_SIZES = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
 
 
-def stage_packs(source, destination):
+def stage_packs(source: str, destination: str) -> None:
     """Each pack's pack.json, music.json, cast/ and world/."""
     for name in sorted(os.listdir(source)):
         pack = os.path.join(source, name)
@@ -55,7 +55,7 @@ def stage_packs(source, destination):
                 shutil.copy(path, os.path.join(destination, name))
 
 
-def core_version():
+def core_version() -> str:
     """The bundled Stella core's version, as it reports itself (e.g. "7.0 b52ccb02e")."""
     class Info(ctypes.Structure):
         _fields_ = [("name", ctypes.c_char_p), ("version", ctypes.c_char_p), ("extensions", ctypes.c_char_p),
@@ -65,7 +65,7 @@ def core_version():
     return info.version.decode()
 
 
-def stella_notice(version):
+def stella_notice(version: str) -> str:
     commit = version.split()[-1] if " " in version else ""
     source = f"{STELLA_SOURCE}/tree/{commit}" if commit else STELLA_SOURCE
     return (f"This download includes the Stella emulator core (version {version}), which runs the game.\n"
@@ -78,7 +78,7 @@ def stella_notice(version):
             f"(LICENSE-ASSETS.md). Haunted House is (c) 1982 Atari - not included; bring your own ROM.\n")
 
 
-def icon():
+def icon() -> str | None:
     """The app icon for this system (macOS .icns, Windows .ico made from the preview PNG), or None."""
     if paths.SYSTEM == "macos":
         return os.path.join(PACKAGE, "icon.icns")
@@ -90,7 +90,7 @@ def icon():
     return None
 
 
-def pyinstaller_command(with_rom):
+def pyinstaller_command(with_rom: bool) -> list[str]:
     """PyInstaller, told what to bundle: the packs, the fonts, the palette, the core (and the ROM)."""
     separator = os.pathsep   # PyInstaller's "source<separator>destination"
     data = [(os.path.join(STAGE, "packs"), "packs"), (paths.FONTS, "shared/fonts"),
@@ -112,7 +112,7 @@ def pyinstaller_command(with_rom):
     return command + [os.path.join(ROOT, "play.py")]
 
 
-def assemble():
+def assemble() -> str:
     """The download's folder: the app, the README and the licences."""
     folder = os.path.join(DIST, NAME)
     if paths.SYSTEM == "macos":
@@ -134,7 +134,7 @@ def assemble():
     return folder
 
 
-def archive(folder, personal):
+def archive(folder: str, personal: bool) -> str:
     """The zip (macOS, Windows) or .tar.gz (Linux) to publish."""
     machine = platform.machine().lower()
     processor = PROCESSORS.get(machine, machine)
@@ -150,7 +150,7 @@ def archive(folder, personal):
     return shutil.make_archive(base, "zip", DIST, NAME)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Build Haunted House for download on this system.")
     parser.add_argument("--with-rom", action="store_true", help="bundle your ROM (personal builds only)")
     args = parser.parse_args()

@@ -21,6 +21,10 @@ sys.path.insert(0, HERE)
 from game import monsters as model  # noqa: E402
 from game import ram_map as M  # noqa: E402
 from game import rom as R  # noqa: E402
+from shared.types import Point  # noqa: E402
+
+# (game, frame, RAM before, RAM after, what the model expected, the addresses it got wrong)
+Mismatch = tuple[int, int, bytes, bytes, model.State, list[int]]
 
 GAMES = [0, 2, 5, 7, 8]                  # games 1, 3, 6, 8, 9: each adds a rule
 FRAMES_PER_GAME = 6000
@@ -31,7 +35,7 @@ DYING, NO_MONSTERS = 0x01, 0x40          # GAME_STATE bits: dying; game over / w
 STICK = [JOY_LEFT, JOY_RIGHT, JOY_UP, JOY_DOWN, None]
 
 
-def predict(before, after, rom):
+def predict(before: bytes, after: bytes, rom: bytes) -> model.State:
     """The RAM the model expects after one frame, given the RAM before it (and, from `after`, the few
     things the game updates earlier in the frame than the monster code: clock and player position)."""
     state = model.State(before)
@@ -51,12 +55,12 @@ def predict(before, after, rom):
     return state
 
 
-def apply_follows(state, rom, before, after):
+def apply_follows(state: model.State, rom: bytes, before: bytes, after: bytes) -> None:
     """Games 6-9: monsters follow the player if, later in this frame, the player took stairs or a door."""
-    def was(address):
+    def was(address: int) -> int:
         return before[address - 0x80]
 
-    def now(address):
+    def now(address: int) -> int:
         return after[address - 0x80]
 
     if now(M.FLOOR) != was(M.FLOOR):
@@ -74,17 +78,17 @@ class Bot:
     hundred frames it calls a monster over and runs an errand - out through a door or up the stairs - so the
     monster has the chance to follow."""
 
-    def __init__(self, lab, seed):
+    def __init__(self, lab: Lab, seed: int):
         self.lab = lab
         self.rom = R.load()
         self.dice = random.Random(seed)
-        self.stick = None
+        self.stick: int | None = None
         self.frames_left = 0
-        self.errand = []        # waypoints still to reach
+        self.errand: list[Point] = []        # waypoints still to reach
         self.errand_frames = 0
         self.summoned = 0
 
-    def before_frame(self, frame):
+    def before_frame(self, frame: int) -> list[int]:
         lab = self.lab
         if lab.peek(M.GAME_STATE) & NO_MONSTERS:   # game over or won: start again
             lab.reset()
@@ -98,7 +102,7 @@ class Bot:
         if frame % 1500 == 0:
             scepter = self.dice.random() < 0.4
             lab.poke(M.CARRIED, model.SCEPTER if scepter else M.NOTHING)
-        held = []
+        held: list[int] = []
         if self.frames_left <= 0:
             self.stick = self.dice.choice(STICK)
             self.frames_left = self.dice.randint(10, 90)
@@ -109,12 +113,12 @@ class Bot:
             held.append(BUTTON)
         return held
 
-    def start_errand(self):
+    def start_errand(self) -> None:
         """Plan a way out of the room: its centre, then a door or the stairs, then a bit beyond."""
         room, floor = self.lab.peek(M.ROOM), self.lab.peek(M.FLOOR)
-        exits = []
+        exits: list[list[Point]] = []
         for direction, (kind, number) in R.room_exits(self.rom, room).items():
-            if kind == "door":
+            if kind == "door" and number is not None:
                 beyond = room + R.table(self.rom, "ROOM_STEP")[R.DIRECTIONS.index(direction)]
                 exits.append([self.waypoint(6 + number), R.room_centre(self.rom, beyond % 256)])
             elif kind == "edge" and room in R.stairs(self.rom, floor, self.lab.peek(M.GAME_NUMBER)):
@@ -124,15 +128,15 @@ class Bot:
         if self.dice.random() < 0.5:  # with the scepter, monsters stay near without catching the player
             self.lab.poke(M.CARRIED, model.SCEPTER)
 
-    def waypoint(self, index):
+    def waypoint(self, index: int) -> Point:
         return R.table(self.rom, "WAYPOINT_X")[index], R.table(self.rom, "WAYPOINT_Y")[index]
 
-    def walk_errand(self):
+    def walk_errand(self) -> list[int]:
         """Push the stick towards the next waypoint (diagonally if need be); give up after a while."""
         self.errand_frames -= 1
         target_x, target_y = self.errand[0]
         x, y = self.lab.peek(M.POS_X), self.lab.peek(M.POS_Y)
-        held = []
+        held: list[int] = []
         if abs(x - target_x) > 1:
             held.append(JOY_RIGHT if target_x > x else JOY_LEFT)
         if abs(y - target_y) > 1:
@@ -147,7 +151,7 @@ class Bot:
             self.errand = []
         return held
 
-    def send_monster(self):
+    def send_monster(self) -> None:
         lab = self.lab
         self.summoned += 1
         monster = self.summoned % (lab.peek(M.LAST_MONSTER) + 1)  # each in turn, so all of them chase
@@ -160,14 +164,15 @@ class Bot:
         lab.poke(M.MONSTER_Y + monster, centre_y)
 
 
-def choose_game(lab, game):
+def choose_game(lab: Lab, game: int) -> None:
     while lab.peek(M.GAME_NUMBER) != game:
         lab.hold(SELECT, frames=2)
         lab.run(2)
     lab.reset()
 
 
-def check_game(lab, rom, game, frames, mismatches, events):
+def check_game(lab: Lab, rom: bytes, game: int, frames: int, mismatches: list[Mismatch],
+               events: Counter[str]) -> None:
     choose_game(lab, game)
     bot = Bot(lab, seed=game)
     for frame in range(frames):
@@ -182,7 +187,7 @@ def check_game(lab, rom, game, frames, mismatches, events):
             mismatches.append((game, frame, before, after, expected, wrong))
 
 
-def count_events(before, after, events, game):
+def count_events(before: bytes, after: bytes, events: Counter[str], game: int) -> None:
     """Tally what happened, so a clean run shows it covered the interesting cases."""
     for monster in range(5):
         if before[M.MONSTER_FLOOR + monster - 0x80] != after[M.MONSTER_FLOOR + monster - 0x80]:
@@ -204,7 +209,7 @@ def count_events(before, after, events, game):
         events["frames with a monster in the player's room"] += 1
 
 
-def report(mismatches, events, total):
+def report(mismatches: list[Mismatch], events: Counter[str], total: int) -> None:
     for name, count in sorted(events.items()):
         print(f"  {count:6d}  {name}")
     print(f"\n{total - len(mismatches)}/{total} frames predicted exactly")
@@ -221,11 +226,12 @@ def report(mismatches, events, total):
                   f"model ${expected[address]:02X} game ${after[address - 0x80]:02X}")
 
 
-def main():
+def main() -> None:
     frames = int(sys.argv[1]) if len(sys.argv) > 1 else FRAMES_PER_GAME
     lab = Lab()
     rom = R.load()
-    mismatches, events = [], Counter()
+    mismatches: list[Mismatch] = []
+    events: Counter[str] = Counter()
     for game in GAMES:
         check_game(lab, rom, game, frames, mismatches, events)
     report(mismatches, events, frames * len(GAMES))

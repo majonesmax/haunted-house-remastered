@@ -8,12 +8,15 @@ packs/classic.
 
 import numpy as np
 
+from content import Pack
 from game import guide
+from game.state import GameState
 from looks.base import FloorLook
 from looks.layout import SCREEN_H, SCREEN_W, VIEW_H, VIEW_W, VIEW_X, VIEW_Y
 from shared import hud
 from shared import palettes as PAL
 from shared.pixelart import blit
+from shared.types import Picture, Rgb
 
 NES_COLOURS = np.array(PAL.NES, int)
 BLACK = PAL.NES[PAL.BLACK]
@@ -74,39 +77,40 @@ class NesLook(FloorLook):
     name = "NES REMASTER"
     pack_name = "classic"
 
-    def __init__(self, pack, rom):
+    def __init__(self, pack: Pack, rom: bytes):
         super().__init__(pack, rom)
-        self.nearest = {}  # (r, g, b) -> its NES colour
-        self.shifted = {}  # (packed colour, rows) -> that colour moved rows up or down the palette
+        self.nearest: dict[Rgb, Rgb] = {}  # (r, g, b) -> its NES colour
+        self.shifted: dict[tuple[int, int], Rgb] = {}  # (packed colour, rows) -> moved up or down the palette
 
     # --- colours -------------------------------------------------------------------------------------
-    def to_nes(self, rgb):
+    def to_nes(self, rgb: Picture) -> Picture:
         """An array of colours (..., 3) snapped to the NES palette: each distinct colour matched once."""
         red, green, blue = (rgb[..., channel].astype(np.int32) for channel in range(3))
         colours, where = np.unique((red << 16) | (green << 8) | blue, return_inverse=True)
         unpacked = np.stack([colours >> 16, (colours >> 8) & 255, colours & 255], axis=1)
-        nearest = [self.nearest_colour(tuple(int(channel) for channel in colour)) for colour in unpacked]
+        nearest = [self.nearest_colour((int(red), int(green), int(blue))) for red, green, blue in unpacked]
         snapped = np.array(nearest, np.uint8).reshape(-1, 3)
         return snapped[where.reshape(rgb.shape[:-1])]
 
-    def nearest_colour(self, rgb):
+    def nearest_colour(self, rgb: Rgb) -> Rgb:
         if rgb not in self.nearest:
             distances = ((NES_COLOURS - np.array(rgb, int)) ** 2).sum(axis=1)
-            self.nearest[rgb] = tuple(int(channel) for channel in NES_COLOURS[distances.argmin()])
+            red, green, blue = (int(channel) for channel in NES_COLOURS[distances.argmin()])
+            self.nearest[rgb] = (red, green, blue)
         return self.nearest[rgb]
 
-    def adapt(self, picture):
+    def adapt(self, picture: Picture) -> Picture:
         adapted = picture.copy()
         adapted[..., :3] = self.to_nes(picture[..., :3])
         return adapted
 
-    def dimmed(self, rgb):
+    def dimmed(self, rgb: Picture) -> Picture:
         return self.shift_rows(rgb, -DIM_ROWS)
 
-    def lightning_colour(self, rgb):
+    def lightning_colour(self, rgb: Picture) -> Picture:
         return self.shift_rows(rgb, LIGHTNING_ROWS)
 
-    def shift_rows(self, rgb, rows):
+    def shift_rows(self, rgb: Picture, rows: int) -> Picture:
         """Every colour moved `rows` rows up (lighter) or down (darker) the NES palette, keeping its hue.
         Each distinct colour is worked out once (packed into one number, as in to_nes - finding the
         distinct colours row by row took 28 ms a frame through the win, and the sound stuttered)."""
@@ -115,29 +119,29 @@ class NesLook(FloorLook):
         moved = np.array([self.shifted_colour(int(colour), rows) for colour in colours], np.uint8)
         return moved[where.reshape(rgb.shape[:-1])]
 
-    def shifted_colour(self, packed, rows):
+    def shifted_colour(self, packed: int, rows: int) -> Rgb:
         key = (packed, rows)
         if key not in self.shifted:
             colour = (packed >> 16, (packed >> 8) & 255, packed & 255)
             self.shifted[key] = PAL.NES[shifted(PAL.nearest_nes(colour), rows)]
         return self.shifted[key]
 
-    def background(self):
+    def background(self) -> Rgb:
         return BLACK
 
-    def distant_flash(self, screen, level):
+    def distant_flash(self, screen: Picture, level: float) -> Picture:
         """Lightened towards the palette's deep blue, then back into the palette: black steps through the
         blues as it fades (a grey-blue would snap to grey)."""
         return self.to_nes(np.clip(screen + NES_SKY_FLASH * level, 0, 255).astype(np.uint8))
 
     # --- the view: the urn shimmers, and dying turns it red ------------------------------------------
-    def picture(self, name, frame_no):
+    def picture(self, name: str, frame_no: int) -> Picture | None:
         sprite = super().picture(name, frame_no)
         if sprite is None or not name.startswith("urn"):
             return sprite
         return shimmer(sprite, frame_no)
 
-    def view(self, state, frame_no):
+    def view(self, state: GameState, frame_no: int) -> Picture:
         picture = super().view(state, frame_no)
         if state.mode == "dying" and frame_no // 4 % 2:
             tinted = picture.astype(int)
@@ -146,7 +150,7 @@ class NesLook(FloorLook):
         return picture
 
     # --- the status line, title and win ---------------------------------------------------------------
-    def draw_status(self, screen, state, frame_no):
+    def draw_status(self, screen: Picture, state: GameState, frame_no: int) -> None:
         """Above the view: matches used (and the one burning), what's carried, the urn so far, lives.
         Below it: the floor's name (from the pack), the game and the floor number."""
         hud.draw_text(screen, "MATCHES", VIEW_X, LABEL_Y, GREY)
@@ -165,7 +169,7 @@ class NesLook(FloorLook):
         floor = f"FLOOR {state.floor + 1}"
         hud.draw_text(screen, floor, VIEW_X + VIEW_W - hud.text_width(floor), SCREEN_H - 14, DIM_GREY)
 
-    def draw_match(self, screen, state, x, y):
+    def draw_match(self, screen: Picture, state: GameState, x: int, y: int) -> None:
         """A match burning down while lit: a flame over a stick as long as the seconds left."""
         if not state.match_lit:
             return
@@ -173,7 +177,7 @@ class NesLook(FloorLook):
         screen[y + 3:y + 5, x:x + length] = EMBER
         screen[y + 1:y + 7, x + length:x + length + 3] = FLAME
 
-    def draw_carried(self, screen, state, frame_no, x, y):
+    def draw_carried(self, screen: Picture, state: GameState, frame_no: int, x: int, y: int) -> None:
         hud.frame_box(screen, x, y, x + SLOT + 1, y + SLOT + 1, DIM_GREY)
         if state.carried is None:
             return
@@ -181,10 +185,10 @@ class NesLook(FloorLook):
         name = "key" if item.number == 0 else "scepter" if item.number == 1 else f"urn{item.shape}"
         self.draw_in_slot(screen, self.picture(name, frame_no), x, y)
 
-    def draw_urn(self, screen, state, frame_no, x, y):
+    def draw_urn(self, screen: Picture, state: GameState, frame_no: int, x: int, y: int) -> None:
         """The urn so far: three slots, one per piece. Filled: the pieces you hold, or else the biggest group
         of pieces joined together (a lone piece on the floor doesn't count)."""
-        joined = ()
+        joined: tuple[int, ...] = ()
         if state.carried is not None and state.carried >= 2:
             joined = URN_PIECES.get(state.items[state.carried].shape, ())
         else:
@@ -197,20 +201,20 @@ class NesLook(FloorLook):
             if piece in joined:
                 self.draw_in_slot(screen, self.picture(f"urn{piece}", frame_no), left, y)
 
-    def draw_lives(self, screen, state, frame_no, x, y):
+    def draw_lives(self, screen: Picture, state: GameState, frame_no: int, x: int, y: int) -> None:
         eyes = self.picture("eyes_centre", frame_no)
         if eyes is not None:
             blit(screen, eyes, x, y + 1)
         hud.draw_text(screen, f"X{state.lives}", x + 16, y, WHITE)
 
-    def draw_in_slot(self, screen, sprite, x, y):
+    def draw_in_slot(self, screen: Picture, sprite: Picture | None, x: int, y: int) -> None:
         if sprite is not None:
             blit(screen, sprite, x + 1 + (SLOT - sprite.shape[1]) // 2, y + 1 + (SLOT - sprite.shape[0]) // 2)
 
-    def outline_colour(self):
+    def outline_colour(self) -> Rgb:
         return BLACK
 
-    def draw_title(self, screen, state, frame_no):
+    def draw_title(self, screen: Picture, state: GameState, frame_no: int) -> None:
         """Game select: the mansion on its hill under the moon, the eyes looking out of the tower window,
         lightning now and then. Game over: the eyes look out a last time, close, and the window's light
         flickers and goes out. After a win: the ending (draw_ending)."""
@@ -243,12 +247,12 @@ class NesLook(FloorLook):
         hint = "TAB GAME   ENTER PLAY   H HELP"
         hud.draw_text(screen, hint, centred(hint), HINT_Y, GREY)
 
-    def draw_logo(self, screen, title):
+    def draw_logo(self, screen: Picture, title: str) -> None:
         hud.draw_text(screen, title, centred(title, 2) + 1, LOGO_Y + 2, BLOOD, scale=2, shadow=None)
         hud.draw_text(screen, title, centred(title, 2), LOGO_Y, WHITE, scale=2)
 
     # --- the endings ---------------------------------------------------------------------------------
-    def draw_ending(self, screen, state, since):
+    def draw_ending(self, screen: Picture, state: GameState, since: int) -> None:
         """After a win: dawn behind the mansion, the sun coming up behind it, the tower window dark - and
         the eyes walking off down the hill with the whole urn. Then how you did. It fades in from the
         light outside the front door."""
@@ -262,7 +266,7 @@ class NesLook(FloorLook):
         if since < FADE_FROM_LIGHT:
             self.lighten(screen, 1 - since / FADE_FROM_LIGHT)   # from where the win at the door left off
 
-    def draw_dawn_sky(self, screen):
+    def draw_dawn_sky(self, screen: Picture) -> None:
         """Bands of the NES's blues, purples, pinks and oranges, mixing on alternate rows where they meet."""
         for (top, colour), (bottom, _next) in zip(DAWN_BANDS, DAWN_BANDS[1:] + [(SCREEN_H, None)]):
             screen[top:bottom] = PAL.NES[colour]
@@ -271,7 +275,7 @@ class NesLook(FloorLook):
         for x, y in DAWN_STARS:
             screen[y, x] = WHITE
 
-    def draw_sun(self, screen):
+    def draw_sun(self, screen: Picture) -> None:
         """The pack's moon, warmed into a rising sun."""
         frames = self.pack.world.get("title_moon")
         if not frames:
@@ -282,7 +286,7 @@ class NesLook(FloorLook):
         sun = self.adapt(sun).repeat(SUN_SCALE, axis=0).repeat(SUN_SCALE, axis=1)
         blit(screen, sun, *SUN_AT)
 
-    def draw_eyes_leaving(self, screen, since):
+    def draw_eyes_leaving(self, screen: Picture, since: int) -> None:
         """From the front door, the eyes walk off down the hill to the right carrying the urn, stopping
         once to look back at the house."""
         door = self.pack.info.get("title_door")
@@ -300,7 +304,7 @@ class NesLook(FloorLook):
         if urn is not None:
             blit(screen, urn, x + eyes.shape[1] // 2 + 2, GROUND_Y - urn.shape[0] + 2 - bob)
 
-    def draw_score(self, screen, state, since):
+    def draw_score(self, screen: Picture, state: GameState, since: int) -> None:
         self.draw_logo(screen, "YOU ESCAPED!")
         with_urn = f"WITH THE URN - GAME {state.game}"
         hud.draw_text(screen, with_urn, centred(with_urn), GAME_Y, WHITE)
@@ -313,14 +317,14 @@ class NesLook(FloorLook):
             hint = "TAB GAME   ENTER PLAY   H HELP"
             hud.draw_text(screen, hint, centred(hint), GAME_Y + 44, WHITE)   # clear of the eyes' path
 
-    def lighten(self, screen, amount):
+    def lighten(self, screen: Picture, amount: float) -> None:
         """The win at the door: the screen lightening `amount` (0-1) of the way - on the NES, the way its
         games fade to white, a palette row at a time."""
         rows = int(amount * (WON_ROWS + 1))
         if rows:
             screen[:] = self.shift_rows(screen, min(rows, WON_ROWS))
 
-    def draw_intro(self, screen, frame_no):
+    def draw_intro(self, screen: Picture, frame_no: int) -> None:
         """The story, a line at a time, over the dark; the eyes watching from below."""
         screen[:] = BLACK
         shown = frame_no // INTRO_LINE_FRAMES + 1
@@ -333,7 +337,7 @@ class NesLook(FloorLook):
             hint = "PRESS ANY KEY"
             hud.draw_text(screen, hint, centred(hint), HINT_Y, DIM_GREY)
 
-    def draw_banner(self, screen, name, subtitle, left):
+    def draw_banner(self, screen: Picture, name: str, subtitle: str, left: float) -> None:
         """The floor's name in a box across the top of the view."""
         width = max(hud.text_width(name), hud.text_width(subtitle)) + 24
         x0, y0 = (SCREEN_W - width) // 2, VIEW_Y + BANNER_TOP
@@ -342,7 +346,8 @@ class NesLook(FloorLook):
         hud.draw_text(screen, name, centred(name), y0 + 6, WHITE)
         hud.draw_text(screen, subtitle, centred(subtitle), y0 + 18, GREY)
 
-    def draw_world_picture(self, screen, name, place, scale):
+    def draw_world_picture(self, screen: Picture, name: str, place: tuple[int, int],
+                           scale: int) -> Picture | None:
         """A world picture (the pack's own title art), scaled up, at (x, y); None if the pack has none."""
         frames = self.pack.world.get(name)
         if not frames:
@@ -351,14 +356,14 @@ class NesLook(FloorLook):
         blit(screen, picture, *place)
         return picture
 
-    def darken_window(self, screen):
+    def darken_window(self, screen: Picture) -> None:
         window = self.pack.info.get("title_window")
         if window:
             x, y, width, height = (value * MANSION_SCALE for value in window)
             top, left = MANSION_AT[1] + y, MANSION_AT[0] + x
             screen[top:top + height, left:left + width] = BLACK
 
-    def draw_window_eyes(self, screen, frame_no, closed=False):
+    def draw_window_eyes(self, screen: Picture, frame_no: int, closed: bool = False) -> None:
         """The eyes in the lit tower window: looking around, and blinking (or closed)."""
         window = self.pack.info.get("title_window")
         if not window:
@@ -374,7 +379,7 @@ class NesLook(FloorLook):
             screen[screen_y - 1:screen_y + height + 1, screen_x - 1:screen_x + width + 1] = BLACK  # the room
             blit(screen, eyes, screen_x, screen_y)
 
-    def draw_win(self, screen, state, frame_no):
+    def draw_win(self, screen: Picture, state: GameState, frame_no: int) -> None:
         """Out of the front door with the urn: the light outside grows as the game holds the moment."""
         since = self.frames_into("won", frame_no)
         self.lighten(screen, min(1.0, since / WON_FRAMES))
@@ -382,7 +387,7 @@ class NesLook(FloorLook):
         hud.draw_text(screen, banner, centred(banner, 2), VIEW_Y + 20, flash_colour(frame_no), scale=2)
 
 
-def shifted(index, rows):
+def shifted(index: int, rows: int) -> int:
     """A NES colour index `rows` rows lighter (+) or darker (-); off the bottom is black, off the top the
     lightest row."""
     if index & 0x0F >= FIRST_BLACK_HUE:
@@ -393,7 +398,7 @@ def shifted(index, rows):
     return min(row, 3) * ROW + (index & 0x0F)
 
 
-def shimmer(sprite, frame_no):
+def shimmer(sprite: Picture, frame_no: int) -> Picture:
     """Recolour the urn: its brightest colour and its shade follow the NES flash cycle."""
     solid = sprite[..., 3] > 0
     colours = np.unique(sprite[solid][:, :3], axis=0)
@@ -409,7 +414,7 @@ def shimmer(sprite, frame_no):
     return shimmered
 
 
-def window_lit(since):
+def window_lit(since: int) -> bool:
     """Game over: is the tower window still lit, `since` frames in? Lit, then flickering, then out."""
     if since < LIGHT_FLICKER:
         return True
@@ -418,7 +423,7 @@ def window_lit(since):
     return bool(FLICKER_PATTERN[(since - LIGHT_FLICKER) // 4 % len(FLICKER_PATTERN)])
 
 
-def walk(since, start_x):
+def walk(since: int, start_x: float) -> tuple[float, bool]:
     """The eyes leaving from start_x: (pixels walked, looking back?) `since` frames into the ending."""
     walking = max(0, since - WALK_START)
     stop_at = (LOOK_BACK_AT - start_x) / WALK_SPEED   # frames of walking to the look-back spot
@@ -429,9 +434,9 @@ def walk(since, start_x):
     return (walking - LOOK_BACK_FRAMES) * WALK_SPEED, False
 
 
-def flash_colour(frame_no):
+def flash_colour(frame_no: int) -> Rgb:
     return PAL.NES[PAL.flash_colour(frame_no)]
 
 
-def centred(text, scale=1):
+def centred(text: str, scale: int = 1) -> int:
     return (SCREEN_W - hud.text_width(text, scale)) // 2

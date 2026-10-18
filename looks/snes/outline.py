@@ -5,12 +5,13 @@ import numpy as np
 from PIL import Image
 
 from shared.pixelart import shade, snes_rgb
+from shared.types import Mask, Picture
 
 
 DARK = 70  # brightness (0-255) below which a pixel counts as line art rather than fill
 
 
-def recolour_outline(sprite, dark=0.45, max_colours=15):
+def recolour_outline(sprite: Picture, dark: float = 0.45, max_colours: int = 15) -> Picture:
     """Silhouette-edge pixels -> a dark shade of the fill colour next to them (DS-style coloured line art);
     interior dark pixels (eyes, mouths) keep their colour. Then cap the sprite at max_colours."""
     out = sprite.copy()
@@ -26,12 +27,12 @@ def recolour_outline(sprite, dark=0.45, max_colours=15):
         nearby_fill = fill[rows, cols]
         if nearby_fill.any():
             colours, counts = np.unique(rgb[rows, cols][nearby_fill], axis=0, return_counts=True)
-            most_common = colours[np.argmax(counts)]
-            out[y, x, :3] = snes_rgb(np.array(shade(most_common, dark), np.uint8))
+            red, green, blue = (int(channel) for channel in colours[np.argmax(counts)])   # the most common
+            out[y, x, :3] = snes_rgb(np.array(shade((red, green, blue), dark), np.uint8))
     return capped(out, solid, max_colours)
 
 
-def capped(sprite, solid, max_colours):
+def capped(sprite: Picture, solid: Mask, max_colours: int) -> Picture:
     """At most max_colours colours among the solid pixels (a SNES sprite palette): merged by median cut."""
     pixels = sprite[..., :3][solid]
     if len(np.unique(pixels, axis=0)) <= max_colours:
