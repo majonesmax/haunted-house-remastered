@@ -32,7 +32,9 @@ How it's built: the game runs in `game/emulator.py`; `game/state.py` turns its R
 pack's cast and world from `packs/` (the original 2600 graphics for anything a pack leaves out). A pack's
 soundtrack (`music.json`, original chiptune) is rendered by `music/chiptune.py` and follows the game
 (`music/player.py`): a theme per floor, tension when a monster is in your room, jingles for a lost life, game
-over and the win, all under the game's own sound effects. The rules for
+over and the win. The game's own sound effects are replaced by remastered ones (`music/effects.py`) that
+say what happened - a match striking, a door creaking, steps going up or down the stairs, a key's jingle -
+worked out from the game's state (`music/events.py`); E brings back the original 2600 sound. The rules for
 working on it are in [CLAUDE.md](CLAUDE.md).
 
 ## What we know

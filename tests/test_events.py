@@ -1,7 +1,7 @@
 """The remastered sound effects fire on the right events: music/events.py, checked in the running game.
 
-Each scene plays a moment of the game (set up with the lab's pokes, as the research did), feeding every frame's
-state to an EventWatcher, and checks the effects it asks for - and that it doesn't ask for wrong ones.
+Each scene plays a moment of the game (set up with the lab's pokes, as the research did), feeding every
+frame's state to an EventWatcher, and checks the effects it asks for - and that it doesn't ask for wrong ones.
 
 Usage: python tests/test_events.py        (exit code 1 if a check fails)
 """

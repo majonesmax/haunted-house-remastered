@@ -28,6 +28,8 @@ python tests/golden.py                     # every look still draws the same pix
 python tests/test_facing.py                # monsters face the way they walk
 python packs/classic/source/draw.py        # regenerate the classic pack's PNGs from its text art
 python music/chiptune.py                   # the classic soundtrack as WAVs in shots/music/, to listen to
+python -m music.effects                    # the remastered sound effects as WAVs in shots/effects/
+python tests/test_events.py                # each effect fires on the right event in the running game
 ruff check --config ruff.toml .            # the readability rules
 ```
 
