@@ -38,7 +38,8 @@ What's next for the remaster, roughly in order. Tick items off as they're done.
 - [x] Recording; dropping your ROM on the window
 - [x] A README, and a guide to all the documentation (docs/README.md)
 - [x] Packaged downloads: package/build.py, as Adventure Forever's, with the same pinned Stella core
-- [ ] The Windows download, built on Windows, and a first release
+- [x] The Windows download, built by GitHub (.github/workflows/downloads.yml)
+- [ ] Run the Windows build once on a PC, then the first release (tag v1.0)
 
 ## Housekeeping
 

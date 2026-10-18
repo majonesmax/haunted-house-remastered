@@ -64,6 +64,16 @@ and says whether it works, in `self-check.txt` and `self-check.png` in your Pict
 "Haunted House". On a Mac:
 `"Haunted House.app/Contents/MacOS/Haunted House" --check`; on Windows: `"Haunted House.exe" --check`.
 
+GitHub can build the Windows and macOS downloads too, so no one has to build on a PC: the "Downloads"
+workflow (`.github/workflows/downloads.yml`). Run it from the Actions tab to try a build, or push a tag to
+make a release with both zips, their checksums and the notes in `package/release-notes/<tag>.md`:
+
+```sh
+git tag v1.0 && git push origin v1.0
+```
+
+If the repository has a `HAUNTED_HOUSE_ROM` secret (the ROM, base64), each build is also run with `--check`.
+
 ## Controls
 
 In the game, **H** shows all of these.

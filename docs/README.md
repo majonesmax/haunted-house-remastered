@@ -48,6 +48,7 @@ Run each with Python from the repository's root.
 |---|---|
 | `play.py` | plays the game (`--look`, `--pack`, `--grid`; `--check`: plays itself for a few seconds and says whether it works) |
 | `package/build.py` | builds the download for the system it runs on (`package/README.txt` goes in it) |
+| `.github/workflows/downloads.yml` | GitHub builds the Windows and macOS downloads, and a tag makes the release (notes: `package/release-notes/`) |
 | `package/make_icon.py` | the app's icon, from the nocturne pack's own pictures |
 | `tools/get_core.py` | the pinned Stella core, `b52ccb02e`, checksum-verified (from Adventure Forever's releases) |
 | `tools/preview.py` | every look in every scripted situation, beside the original, as one picture in `shots/` |
