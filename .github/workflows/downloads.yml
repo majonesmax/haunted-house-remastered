@@ -1,7 +1,8 @@
 # Builds the downloads - Windows and macOS - on GitHub's computers, so no one has to build on a PC. Each is
 # built by package/build.py with the pinned Stella (tools/get_core.py), then run with --check if the
 # HAUNTED_HOUSE_ROM secret holds a ROM (base64; secrets are never shown or committed). Without it the build is
-# made but not run.
+# made but not run. The ROM never goes into a download (the build is made before it's written) or a log
+# (GitHub masks secrets); the logs say only what the check saw.
 #
 # Run it by hand to try a build: Actions -> "Downloads" -> Run workflow (or: gh workflow run downloads.yml).
 # The zips are the run's artifacts. Push a tag (git tag v1.0 && git push origin v1.0) and it also makes that
@@ -66,12 +67,13 @@ jobs:
         if: steps.rom.outputs.path && runner.os == 'macOS'
         run: |
           "${{ matrix.app }}" "${{ steps.rom.outputs.path }}" --check
-      - name: The check's picture
-        if: always() && steps.rom.outputs.path
+      - name: The check's picture (private repository only - it shows the 2600's picture, from the ROM)
+        if: always() && steps.rom.outputs.path && github.event.repository.private
         uses: actions/upload-artifact@v4
         with:
           name: self-check-${{ matrix.name }}
           path: ~/Pictures/Haunted House/self-check.*
+          retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
           name: download-${{ matrix.name }}
