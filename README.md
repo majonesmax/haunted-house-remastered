@@ -2,6 +2,9 @@
 
 ![The same moment in the two looks: the NES remaster and the SNES remaster](docs/media/looks.png)
 
+▶️ **[Watch a full playthrough on YouTube](https://youtu.be/VENjmHKR9GY)** (3:41): game 1 start to finish - all
+three pieces, the urn out of the front door, and a lot of dying - switching looks and views along the way.
+
 Atari 2600 **Haunted House** (James Andreasen, 1982) running *unmodified* in an emulator, with every frame
 redrawn live from the game's 128 bytes of RAM. It's the sister project of
 [Adventure Forever](https://github.com/majonesmax/adventure-forever), and works the same way.
