@@ -1,0 +1,106 @@
+# Builds the downloads - Windows and macOS - on GitHub's computers, so no one has to build on a PC. Each is
+# built by package/build.py with the pinned Stella (tools/get_core.py), then run with --check if the
+# HAUNTED_HOUSE_ROM secret holds a ROM (base64; secrets are never shown or committed). Without it the build is
+# made but not run.
+#
+# Run it by hand to try a build: Actions -> "Downloads" -> Run workflow (or: gh workflow run downloads.yml).
+# The zips are the run's artifacts. Push a tag (git tag v1.0 && git push origin v1.0) and it also makes that
+# release: both zips, SHA256SUMS.txt, and the notes in package/release-notes/<tag>.md (edit them later with
+# gh release edit <tag> --notes-file ...).
+name: Downloads
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: windows-x64, runner: windows-latest,
+             app: "package/dist/Haunted House/Haunted House.exe"}
+          - {name: macos-arm64, runner: macos-14,
+             app: "package/dist/Haunted House/Haunted House.app/Contents/MacOS/Haunted House"}
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - name: Requirements and the pinned Stella core
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python tools/get_core.py
+      - name: Build
+        run: python package/build.py
+      - name: The ROM, if there's a secret for it
+        id: rom
+        env:
+          ROM: ${{ secrets.HAUNTED_HOUSE_ROM }}
+        run: |
+          if [ -z "$ROM" ]; then
+            echo "::notice::no HAUNTED_HOUSE_ROM secret: the ${{ matrix.name }} build was made but not run"
+            exit 0
+          fi
+          python -c "import base64, os, sys; sys.stdout.buffer.write(base64.b64decode(os.environ['ROM']))" \
+            > "$RUNNER_TEMP/haunted_house.a26"
+          echo "path=$RUNNER_TEMP/haunted_house.a26" >> "$GITHUB_OUTPUT"
+      - name: Run it (--check)
+        if: steps.rom.outputs.path && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $rom = "${{ steps.rom.outputs.path }}"
+          $run = Start-Process -FilePath "${{ matrix.app }}" -ArgumentList "`"$rom`"", "--check" -Wait -PassThru
+          Get-Content "$env:USERPROFILE\Pictures\Haunted House\self-check.txt"
+          exit $run.ExitCode
+      - name: Run it (--check)
+        if: steps.rom.outputs.path && runner.os == 'macOS'
+        run: |
+          "${{ matrix.app }}" "${{ steps.rom.outputs.path }}" --check
+      - name: The check's picture
+        if: always() && steps.rom.outputs.path
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-check-${{ matrix.name }}
+          path: ~/Pictures/Haunted House/self-check.*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: download-${{ matrix.name }}
+          path: package/dist/Haunted-House-*.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: download-*
+          path: downloads
+          merge-multiple: true
+      - name: Checksums and the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          (cd downloads && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          notes="package/release-notes/$TAG.md"
+          if [ ! -f "$notes" ]; then
+            echo "Haunted House, remastered - $TAG." > "$RUNNER_TEMP/notes.md"
+            notes="$RUNNER_TEMP/notes.md"
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" downloads/* --clobber
+          else
+            gh release create "$TAG" downloads/* --title "Haunted House, remastered ${TAG#v}" --notes-file "$notes"
+          fi

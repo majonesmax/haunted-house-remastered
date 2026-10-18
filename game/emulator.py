@@ -277,9 +277,13 @@ class AudioOut:
         self.dropped = 0          # emulator samples thrown away because the buffer was full (diagnostics)
         self.xruns = 0            # the sound card's own "callback was late" flag = audible dropouts
         self.tap = None           # tap(block): sees every block exactly as played (recorder.py)
-        self.stream = sd.OutputStream(samplerate=rate, channels=2, dtype="int16", callback=self._pull,
-                                      blocksize=block, latency="high")
-        self.stream.start()
+        try:
+            self.stream = sd.OutputStream(samplerate=rate, channels=2, dtype="int16", callback=self._pull,
+                                          blocksize=block, latency="high")
+            self.stream.start()
+        except sd.PortAudioError as error:   # no sound card (a build server): play on, silently
+            print(f"no sound: {error}", flush=True)
+            self.stream = None
 
     @property
     def underruns(self):  # old name, kept for callers
