@@ -9,7 +9,7 @@ right); the tarantulas are drawn facing up and turned for the rest.
 import numpy as np
 
 from shared.palettes import NES
-from shared.pixelart import from_ascii
+from shared.pixelart import from_ascii, glinting
 
 OUTLINE = 0x0F
 
@@ -297,7 +297,9 @@ URN = """
 ................
 """
 URN_COLOURS = {"V": 0x2C, "v": 0x1C, "H": 0x3C, "O": OUTLINE}
-URN_PIECE_COLUMNS = {2: range(0, 5), 3: range(5, 11), 4: range(11, 16)}  # piece -> its columns of URN
+URN_PIECE_ROWS = {2: range(0, 5), 3: range(5, 10), 4: range(10, 16)}   # the lip and neck, the body
+# with its handles, the foot: each piece a real chunk of vase (cut down its middle, the side pieces were
+# just the handles - too small to find)
 URN_SHAPE_PIECES = {2: (2,), 3: (3,), 4: (4,), 5: (2, 3), 6: (2, 4), 7: (3, 4), 8: (2, 3, 4)}
 
 # --- the stairs -----------------------------------------------------------------------------------------
@@ -374,10 +376,10 @@ def urn_shape(shape):
     """The urn with only the pieces of `shape` drawn."""
     keep = set()
     for piece in URN_SHAPE_PIECES[shape]:
-        keep.update(URN_PIECE_COLUMNS[piece])
+        keep.update(URN_PIECE_ROWS[piece])
     rows = []
-    for row in URN.strip("\n").split("\n"):
-        rows.append("".join(cell if column in keep else "." for column, cell in enumerate(row)))
+    for number, row in enumerate(URN.strip("\n").split("\n")):
+        rows.append(row if number in keep else "." * len(row))
     return from_ascii("\n".join(rows), colours(URN_COLOURS), strict=True)
 
 
@@ -402,7 +404,8 @@ def cast_pictures():
     pictures["key_0"] = from_ascii(KEY, colours(ITEM_COLOURS), strict=True)
     pictures["scepter_0"] = from_ascii(SCEPTER, colours(ITEM_COLOURS), strict=True)
     for shape in URN_SHAPE_PIECES:
-        pictures[f"urn{shape}_0"] = urn_shape(shape)
+        for frame, picture in enumerate(glinting(urn_shape(shape), NES[0x30])):
+            pictures[f"urn{shape}_{frame}"] = picture
     pictures["stairs_up_0"] = stairs(going_up=True)
     pictures["stairs_down_0"] = stairs(going_up=False)
     return pictures

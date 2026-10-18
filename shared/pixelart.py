@@ -86,3 +86,22 @@ def snes_rgb(rgb):
 def shade(rgb, factor):
     """An (r, g, b) colour made lighter (factor > 1) or darker (< 1), capped at 255."""
     return tuple(int(min(255, channel * factor)) for channel in rgb)
+
+
+GLINT_EVERY = 12         # a glinting picture's frames (8 game frames each): a glint about every 1.6 seconds
+
+
+def glinting(picture, colour, every=GLINT_EVERY):
+    """A small thing's frames, with a glint now and then so it catches the eye: plain, then a point of
+    light on its top edge, then a little star there."""
+    rows, columns = np.nonzero(picture[..., 3])
+    top = rows.min()
+    x = int(columns[rows == top].min()) + 1
+    point = picture.copy()
+    point[top, x] = (*colour, 255)
+    star = point.copy()
+    for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+        y, across = top + dy, x + dx
+        if 0 <= y < star.shape[0] and 0 <= across < star.shape[1]:
+            star[y, across] = (*colour, 255)
+    return [picture] * (every - 2) + [point, star]

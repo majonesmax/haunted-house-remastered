@@ -6,6 +6,7 @@ digits for the shades ("1" darkest). Same sizes as the classic cast (the looks s
 import numpy as np
 
 from paint import art, ramp, shades
+from shared.pixelart import glinting
 
 GHOST = shades("012345", [(8, 8, 20)] + ramp((50, 60, 110), (245, 248, 255), 5))
 BAT = {**shades("1234", ramp((30, 6, 46), (170, 90, 210), 4)), "E": (255, 120, 40), "F": (250, 250, 240)}
@@ -285,8 +286,11 @@ URN = """
 .....1122211....
 ................
 """
+GLINT = (255, 250, 220)   # the point of light a small thing catches
 URN_COLOURS = {**shades("12345", ramp((10, 50, 50), (170, 250, 230), 5)), "G": (230, 190, 70)}
-URN_PIECE_COLUMNS = {2: range(0, 5), 3: range(5, 11), 4: range(11, 16)}
+URN_PIECE_ROWS = {2: range(0, 5), 3: range(5, 10), 4: range(10, 16)}   # the lip and neck, the body
+# with its handles, the foot: each piece a real chunk of vase (cut down its middle, the side pieces were
+# just the handles - too small to find)
 URN_SHAPE_PIECES = {2: (2,), 3: (3,), 4: (4,), 5: (2, 3), 6: (2, 4), 7: (3, 4), 8: (2, 3, 4)}
 STEP = """
 1444444444444441
@@ -350,9 +354,9 @@ def tarantula_pictures():
 def urn_shape(shape):
     keep = set()
     for piece in URN_SHAPE_PIECES[shape]:
-        keep.update(URN_PIECE_COLUMNS[piece])
-    rows = ["".join(cell if column in keep else "." for column, cell in enumerate(row))
-            for row in URN.strip("\n").split("\n")]
+        keep.update(URN_PIECE_ROWS[piece])
+    urn_rows = URN.strip("\n").split("\n")
+    rows = [row if number in keep else "." * len(row) for number, row in enumerate(urn_rows)]
     return art("\n".join(rows), URN_COLOURS)
 
 
@@ -376,7 +380,8 @@ def cast_pictures():
     pictures["key_0"] = art(KEY, GOLD)
     pictures["scepter_0"] = art(SCEPTER, {**GOLD, **RUBY})
     for shape in URN_SHAPE_PIECES:
-        pictures[f"urn{shape}_0"] = urn_shape(shape)
+        for frame, picture in enumerate(glinting(urn_shape(shape), GLINT)):
+            pictures[f"urn{shape}_{frame}"] = picture
     pictures["stairs_up_0"] = stairs(going_up=True)
     pictures["stairs_down_0"] = stairs(going_up=False)
     return pictures
