@@ -40,6 +40,30 @@ What's next for the remaster, roughly in order. Tick items off as they're done.
 - [x] Packaged downloads: package/build.py, as Adventure Forever's, with the same pinned Stella core
 - [x] The Windows download, built by GitHub (.github/workflows/downloads.yml)
 - [x] The first release, v1.0: both downloads built and run (--check) by GitHub
+- [x] A captioned playthrough video (tools/make_video.py), on YouTube and linked from the README
+
+## 6. What playing it taught us (v1.1)
+
+- [x] **G for a hint**: which way to the nearest piece, how to take it, and with the whole urn, which way
+      to the front door; a reminder when the urn comes together that it isn't won yet
+- [x] **O to turn the lights on** - a cheat, for seeing where everything is (you still need a match to
+      pick things up)
+- [x] **Urn pieces you can find**: broken across instead of down the middle, and glinting now and then
+- [x] **Say how to pick things up**: walk into them with a match lit (help, hints, README "How to play")
+- [x] Fix: losing the last life holding the whole urn showed the win's ending
+- [x] Fix: the sound stuttered walking out of the front door (the NES look's fade)
+
+## 7. Code anyone can read
+
+- [x] tools/readability.py at zero, run by a hook after every edit (as in Adventure Forever)
+- [x] Type hints on every signature (shared/types.py), checked by pyright, required by ruff's ANN rules
+- [x] GitHub runs the checks on every push (.github/workflows/checks.yml)
+
+## Maybe later
+
+- [ ] Brighter urn pieces in the SNES look, if they're still hard to spot on its checkered floor
+- [ ] pyright's stricter "standard" mode
+- [ ] Proper types for songs and pack.json (TypedDicts instead of "a dict of anything")
 
 ## Housekeeping
 
