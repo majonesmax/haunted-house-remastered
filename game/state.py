@@ -128,8 +128,9 @@ class GameState:
     @property
     def escaped(self):
         """Back at game select after a win: the game leaves the whole urn in your hands until a new game
-        starts (a new game, or game select at launch, starts with nothing held)."""
-        if self.mode != "select" or self.carried is None:
+        starts (a new game, or game select at launch, starts with nothing held). Losing the last life
+        while holding it ends the same way - at game select, urn in hand - but with no lives left."""
+        if self.mode != "select" or self.carried is None or self.lives == 0:
             return False
         return self.items[self.carried].shape == WHOLE_URN
 

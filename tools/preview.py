@@ -178,9 +178,13 @@ def escaped(lab):
     run(lab, 300)
 
 
-def game_over(lab):
+def game_over(lab, holding_urn=False):
     new_game(lab, 1)
     lab.poke(M.LIVES, 1)
+    if holding_urn:   # the whole urn found, but the last life lost before the front door: still game over
+        lab.poke(M.CARRIED, 2)
+        for offset, shape in enumerate((8, 0xFF, 0xFF)):
+            lab.poke(M.URN_SHAPES + offset, shape)
     for _ in range(120):
         place_monster(lab, 2, 0, 0)
         run(lab, 1, keep=(2,))
@@ -194,8 +198,10 @@ SCENES = [("intro", intro), ("title", title), ("game 1", game_1_start), ("game 1
           ("floor 4", on_floor(4)), ("game 3, dark", game_3_dark), ("distant lightning", distant_lightning),
           ("game 3, match lit", game_3_lit), ("game 3, stairs", game_3_stairs),
           ("game 3, monster near", game_3_monster_near), ("lightning", lightning), ("caught", dying),
-          ("won", won), ("escaped", escaped), ("game over", game_over)]
-SETTLE = {"won": 200, "escaped": 170, "game over": 240}   # endings play out: frames the look has seen them
+          ("won", won), ("escaped", escaped), ("game over", game_over),
+          ("game over, urn in hand", lambda lab: game_over(lab, holding_urn=True))]
+SETTLE = {"won": 200, "escaped": 170, "game over": 240,   # endings play out: frames the look has seen them
+          "game over, urn in hand": 240}
 
 
 def draw_scene(look, game, lab, label, scene):
