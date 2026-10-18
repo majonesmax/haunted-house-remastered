@@ -67,7 +67,6 @@ Run with `.venv/bin/python`:
 | `tools/lab.py` | The lab the others use: the emulator plus save states and RAM pokes, for experiments |
 | `tools/preview.py` | The look in twelve scripted situations, beside the original, as one picture |
 | `tests/golden.py` | Every look still draws exactly the same pixels in those situations |
-| `probe.py` | The first look: walks around and saves a contact sheet |
 
 Pokes are for experiments only. A remaster must never write the game's RAM while someone plays.
 
