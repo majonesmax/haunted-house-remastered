@@ -41,4 +41,4 @@ What's next for the remaster, roughly in order. Tick items off as they're done.
 
 ## Housekeeping
 
-- [ ] Merge the `feel` branch into `main`
+- [x] Merge the `feel` branch into `main`
