@@ -54,8 +54,7 @@ next. A remaster must never poke the game, and this one won't.
 6502 tracer follows every jump and branch from the reset vector. It found 1,797 instructions in 3,446 bytes of
 code, and 650 bytes of data (tables, sprites, the wall plan). That matched the disassembly exactly, which made
 its addresses trustworthy. The tracer also lists, for every RAM byte, every instruction that reads or writes
-it. That table (`docs/generated/ram-xref.md`, made by `tools/xref.py` from your ROM's code, so not published)
-is where most guesses started.
+it. That table ([generated/ram-xref.md](generated/ram-xref.md)) is where most guesses started.
 
 **Decoders that draw what they decode** (`game/rom.py`, `tools/rom_sheet.py`). Every table we decoded is drawn
 into a picture: the sprites, the palette, the plan of each floor with its doors and stairs. A wrong guess about
@@ -119,7 +118,7 @@ confidence.
 
 - **The RAM:** all 128 bytes have a name and a meaning, each marked by how sure we are: 46 entries checked in
   the running game, 18 read from the code (mostly the drawing kernel's scratch bytes and the CPU stack). See
-  `docs/generated/ram-xref.md` (run `tools/xref.py`).
+  [generated/ram-xref.md](generated/ram-xref.md).
 - **The world:** four floors with one shared wall plan, six rooms each, seven doors, locks per floor, stairs
   per floor, and game 9's own layout. All of it is read from the ROM, and every door and stairway is checked
   in every game. See [rom-elements.md](rom-elements.md).

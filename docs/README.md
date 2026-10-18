@@ -22,9 +22,9 @@ checked against the running game.
 - **[How the monsters move](monsters.md)**: how they wander, chase, follow you and get scattered - checked
   by a model that predicts the real game frame for frame.
 - **[The ROM's layout](generated/rom-layout.md)**: which bytes are code and which are data (generated).
-- **`game/ram_map.py`**: all 128 bytes of RAM - each one's name, meaning, and how sure we are. Run
-  `python tools/xref.py` for `docs/generated/ram-xref.md`, which adds every instruction that reads or writes
-  each byte (it's made from your ROM's code, so it isn't published).
+- **[The RAM, byte by byte](generated/ram-xref.md)**: all 128 bytes, each with its name, meaning, how sure
+  we are, and every instruction that reads or writes it (generated from `game/ram_map.py` by
+  `tools/xref.py`).
 
 In short: the player is a pair of eyes on one of four floors. Each floor is a single tall map that scrolls,
 with six rooms joined by seven doors and stairs at the outer edges. The positions of the player, the five
