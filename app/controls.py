@@ -9,6 +9,7 @@ CONTROLS = [
     ("TAB", "GAME SELECT"),
     ("ENTER", "GAME RESET"),
     ("D", "LIGHTNING ON/OFF"),
+    ("M", "MUSIC ON/OFF"),
     ("V", "VIEW"),
     ("P", "PAUSE"),
     ("S", "SCREENSHOT"),

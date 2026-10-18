@@ -7,6 +7,7 @@ Keys (H in the game shows them; the list is app/controls.py):
        arrows + space   the joystick: move, light a match, drop what you carry
        Tab / Enter      GAME SELECT / GAME RESET
        D   the left difficulty switch: lightning on (B, the default) or off (A)
+       M   the soundtrack on or off
        V   view: side by side -> remaster -> 2600      P   pause      S   screenshot
        F   fullscreen      H   help      Esc   quit
 """

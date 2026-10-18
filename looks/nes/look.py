@@ -31,6 +31,18 @@ LABEL_Y, VALUE_Y = 6, 18                       # the status band above the view:
 NAME_Y = VIEW_Y + VIEW_H + 14                  # the floor's name, below the view
 SLOT = 18                                      # an item box / urn slot
 URN_PIECES = {2: (2,), 3: (3,), 4: (4,), 5: (2, 3), 6: (2, 4), 7: (3, 4), 8: (2, 3, 4)}  # shape -> pieces
+
+# the title screen
+SKY, SKY_FLASH = PAL.NES[0x01], PAL.NES[0x31]
+STARS = [(14, 18), (40, 9), (61, 30), (88, 14), (117, 24), (139, 8), (165, 33), (231, 15), (248, 44),
+         (25, 52), (73, 61), (150, 55), (241, 90), (9, 99), (108, 44)]
+MOON_AT, MOON_SCALE = (184, 52), 2
+MANSION_SCALE = 3
+MANSION_AT = (32, 120)                          # 64 x 40 art at three times: the hill meets the bottom
+LOGO_Y, GAME_Y, HINT_Y = 22, 46, 226
+TITLE_LIGHTNING_EVERY, TITLE_LIGHTNING_FRAMES = 330, 4
+TITLE_LOOKS = ("centre", "left", "centre", "right", "up", "centre")
+TITLE_LOOK_FRAMES = 40
 MATCH_SECONDS = 20
 
 
@@ -159,20 +171,61 @@ class NesLook(FloorLook):
         return BLACK
 
     def draw_title(self, screen, state, frame_no):
+        """Game select: the mansion on its hill under the moon, the eyes looking out of the tower window,
+        lightning now and then. Game over: the same night, the window dark."""
         game_over = state.lives == 0
+        flash = frame_no % TITLE_LIGHTNING_EVERY < TITLE_LIGHTNING_FRAMES
+        screen[:] = SKY_FLASH if flash else SKY
+        for x, y in STARS:
+            screen[y, x] = WHITE
+        self.draw_world_picture(screen, "title_moon", MOON_AT, MOON_SCALE)
+        mansion = self.draw_world_picture(screen, "title_mansion", MANSION_AT, MANSION_SCALE)
+        if mansion is not None and game_over:
+            self.darken_window(screen)
+        elif mansion is not None:
+            self.draw_window_eyes(screen, frame_no)
         title = "GAME OVER" if game_over else "HAUNTED HOUSE"
-        hud.draw_text(screen, title, centred(title, 2), 64, WHITE, scale=2)
-        eyes = self.picture("eyes_centre", frame_no)
-        blinking = frame_no % 180 < 6
-        if eyes is not None and not blinking:
-            blit(screen, eyes, (SCREEN_W - eyes.shape[1]) // 2, 108)
+        hud.draw_text(screen, title, centred(title, 2) + 1, LOGO_Y + 2, BLOOD, scale=2, shadow=None)
+        hud.draw_text(screen, title, centred(title, 2), LOGO_Y, WHITE, scale=2)
         game = f"GAME {state.game}"
-        hud.draw_text(screen, game, centred(game), 140, GREY)
+        hud.draw_text(screen, game, centred(game), GAME_Y, WHITE)
         if game_over:
             matches = f"MATCHES USED {state.matches_used}"
-            hud.draw_text(screen, matches, centred(matches), 160, GREY)
+            hud.draw_text(screen, matches, centred(matches), GAME_Y + 12, GREY)
         hint = "SELECT: TAB   START: ENTER"
-        hud.draw_text(screen, hint, centred(hint), 200, DIM_GREY)
+        hud.draw_text(screen, hint, centred(hint), HINT_Y, GREY)
+
+    def draw_world_picture(self, screen, name, at, scale):
+        """A world picture (the pack's own title art), scaled up, at (x, y); None if the pack has none."""
+        frames = self.pack.world.get(name)
+        if not frames:
+            return None
+        picture = self.adapt(frames[0]).repeat(scale, axis=0).repeat(scale, axis=1)
+        blit(screen, picture, *at)
+        return picture
+
+    def darken_window(self, screen):
+        window = self.pack.info.get("title_window")
+        if window:
+            x, y, width, height = (value * MANSION_SCALE for value in window)
+            top, left = MANSION_AT[1] + y, MANSION_AT[0] + x
+            screen[top:top + height, left:left + width] = BLACK
+
+    def draw_window_eyes(self, screen, frame_no):
+        """The eyes in the lit tower window: looking around, and blinking."""
+        window = self.pack.info.get("title_window")
+        if not window:
+            return
+        x, y, width, height = (value * MANSION_SCALE for value in window)
+        look = TITLE_LOOKS[frame_no // TITLE_LOOK_FRAMES % len(TITLE_LOOKS)]
+        blinking = frame_no % 180 < 8
+        eyes = self.picture("eyes_blink" if blinking else f"eyes_{look}", frame_no)
+        if eyes is not None:
+            screen_x = MANSION_AT[0] + x + (width - eyes.shape[1]) // 2
+            screen_y = MANSION_AT[1] + y + (height - eyes.shape[0]) // 2
+            height, width = eyes.shape[:2]
+            screen[screen_y - 1:screen_y + height + 1, screen_x - 1:screen_x + width + 1] = BLACK  # the room
+            blit(screen, eyes, screen_x, screen_y)
 
     def draw_win(self, screen, state, frame_no):
         banner = "YOU ESCAPED!"

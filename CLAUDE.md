@@ -11,7 +11,8 @@ copies its generic pieces from. How the game was worked out: [docs/taking-it-apa
 
 - **look**: the console - colour rules, status line, title and win screens (`looks/`: nes).
 - **cast**: who - the eyes, the ghost, the bat, the tarantulas, the key, the scepter, the urn, the stairs.
-- **world**: where - each floor's wall and floor tiles, the front door.
+- **world**: where - each floor's wall tops, faces, floor tiles and decorations, the front door, the title
+  screen's mansion and moon; and a soundtrack (`music.json`).
 - **pack**: a folder with a cast and/or a world (`packs/`, `private/packs/`).
 
 Any look shows any pack. A look never knows about a particular pack, and a pack never assumes a look.
@@ -26,6 +27,7 @@ python tools/preview.py                    # the look in every situation, as one
 python tests/golden.py                     # every look still draws the same pixels
 python tests/test_facing.py                # monsters face the way they walk
 python packs/classic/source/draw.py        # regenerate the classic pack's PNGs from its text art
+python music/chiptune.py                   # the classic soundtrack as WAVs in shots/music/, to listen to
 ruff check --config ruff.toml .            # the readability rules
 ```
 

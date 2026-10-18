@@ -22,12 +22,16 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 | Arrows, Space | the joystick: move; light a match (with one lit, drop what you carry) |
 | Tab / Enter | GAME SELECT / GAME RESET |
 | D | the left difficulty switch: lightning on (B, the default) or off (A) |
+| M | the soundtrack on or off |
 | V | view: side by side, remaster only, 2600 only |
 | P / S / F / H / Esc | pause, screenshot, fullscreen, help, quit |
 
 How it's built: the game runs in `game/emulator.py`; `game/state.py` turns its RAM into a `GameState`;
 `game/visibility.py` holds the original's rules for what may be seen; a look in `looks/` draws it, with a
-pack's cast and world from `packs/` (the original 2600 graphics for anything a pack leaves out). The rules for
+pack's cast and world from `packs/` (the original 2600 graphics for anything a pack leaves out). A pack's
+soundtrack (`music.json`, original chiptune) is rendered by `music/chiptune.py` and follows the game
+(`music/player.py`): a theme per floor, tension when a monster is in your room, jingles for a lost life, game
+over and the win, all under the game's own sound effects. The rules for
 working on it are in [CLAUDE.md](CLAUDE.md).
 
 ## What we know

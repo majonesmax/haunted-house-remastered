@@ -45,12 +45,13 @@ class Pictures:
 
 class Pack:
     """A pack: .cast and .world (Pictures), and .info - its pack.json: "title", "description", and "floors",
-    a name for each of the four floors."""
+    a name for each of the four floors. Its soundtrack, if it has one, is music.json in .folder."""
 
     def __init__(self, folder, rom):
         with open(os.path.join(folder, "pack.json")) as about:
             info = json.load(about)
         self.name = os.path.basename(folder)
+        self.folder = folder
         self.info = info
         self.title = info.get("title", self.name)
         self.cast = Pictures(os.path.join(folder, "cast"), original.cast(rom))

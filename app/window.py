@@ -3,7 +3,7 @@
 One frame (GameWindow.run):
     1. input     keys -> the joystick and the console's switches, or window commands (app/controls.py)
     2. the game  one emulator frame (unless paused), and its sound to the speakers
-    3. picture   a GameState snapshot of the RAM -> the look draws it
+    3. picture   a GameState snapshot of the RAM -> the look draws it, and the soundtrack follows it
     4. show      the current view: the remaster beside the 2600 original, the remaster alone, or the
                  original alone; with the help overlay (H) on top if it's open
     5. pace      at the game's 60 frames a second
@@ -18,6 +18,8 @@ from PIL import Image
 
 import looks
 from app.controls import CONTROLS
+from music import chiptune
+from music.player import MusicPlayer
 from game import emulator as E
 from game import paths
 from game.state import Game
@@ -27,8 +29,9 @@ from shared import hud
 JOYSTICK = {pygame.K_UP: E.JOY_UP, pygame.K_DOWN: E.JOY_DOWN, pygame.K_LEFT: E.JOY_LEFT,
             pygame.K_RIGHT: E.JOY_RIGHT, pygame.K_SPACE: E.JOY_B,
             pygame.K_TAB: E.JOY_SELECT, pygame.K_RETURN: E.JOY_START}
-KEYS = {pygame.K_d: "toggle_lightning", pygame.K_v: "next_view", pygame.K_p: "toggle_pause",
-        pygame.K_s: "screenshot", pygame.K_f: "toggle_fullscreen", pygame.K_h: "toggle_help"}
+KEYS = {pygame.K_d: "toggle_lightning", pygame.K_m: "toggle_music", pygame.K_v: "next_view",
+        pygame.K_p: "toggle_pause", pygame.K_s: "screenshot", pygame.K_f: "toggle_fullscreen",
+        pygame.K_h: "toggle_help"}
 LEFT_DIFFICULTY_A, LEFT_DIFFICULTY_B = 10, 12  # the Stella core's buttons for the left switch (docs)
 SWITCH_FRAMES = 3                              # hold a switch button this long for the core to see it
 VIEWS = ("both", "remaster", "2600")
@@ -45,7 +48,8 @@ class GameWindow:
         pygame.display.init()  # not pygame.init(): that opens pygame's own mixer too, a second sound stream
         self.core = E.Core()
         self.core.load(rom_path)
-        self.audio = E.AudioOut(int(self.core.av_info().timing.sample_rate))
+        self.music = MusicPlayer(chiptune.load_songs(self.look.pack.folder))
+        self.audio = E.AudioOut(int(self.core.av_info().timing.sample_rate), mixer=self.music.mixer)
         self.view = "both"
         self.paused = self.help = self.fullscreen = False
         self.lightning = True          # the left difficulty switch at B, the console's default
@@ -60,7 +64,9 @@ class GameWindow:
         while self.handle_input():
             if not self.paused:
                 self.step_game()
-                self.picture = self.look.draw(self.game.state(self.core.ram), self.frame_no)
+                state = self.game.state(self.core.ram)
+                self.music.follow(state)
+                self.picture = self.look.draw(state, self.frame_no)
                 self.frame_no += 1
             self.show()
             clock.tick(FPS)
@@ -146,6 +152,11 @@ class GameWindow:
 
     def toggle_pause(self):
         self.paused = not self.paused
+        self.audio.expect = not self.paused
+        self.music.paused = self.paused
+
+    def toggle_music(self):
+        self.music.toggle()
 
     def toggle_help(self):
         self.help = not self.help
