@@ -60,25 +60,42 @@ def swell(cycles, depth, phase=0.0):
     return (1 - depth + depth * (0.5 + 0.5 * np.sin(2 * np.pi * cycles * t + phase)))[:, None]
 
 
-def rain(seed, drops_a_second=90):
-    """Rain: a soft wash under thousands of separate drops - the drops are what make it rain, not static."""
+def rain(seed, drops_a_second=40):
+    """Rain: separate drops - each a tiny ping, some near and clear, many far and soft - over a low murmur.
+    (A wash of plain noise, however filtered, sounds like static.)"""
     length = seconds(LOOP_SECONDS)
-    wash = filtered(noise(length, seed), 200, 5000, tilt=0.6)
-    rng = np.random.default_rng(seed + 1)
-    drops = np.zeros((length, 2))
-    count = drops_a_second * LOOP_SECONDS
+    rng = np.random.default_rng(seed)
+    near = scatter_drops(rng, length, drops_a_second, 0.6)
+    far = filtered(scatter_drops(rng, length, drops_a_second * 6, 0.25), 200, 2500)
+    murmur = filtered(noise(length, seed), 60, 900, tilt=1.0)
+    return (near + 0.35 * far + 0.12 * murmur) * swell(3, 0.3, phase=seed)
+
+
+def scatter_drops(rng, length, a_second, loudness):
+    """`a_second` drops a second on each side, at random, mostly small; looping round the end."""
+    pings = [drop_ping(hz) for hz in np.geomspace(1500, 5000, 12)]
+    track = np.zeros((length + len(pings[0]), 2))
     for side in range(2):
-        where = rng.integers(0, length, count)
-        drops[where, side] = rng.uniform(0.1, 1.0, count) ** 3   # mostly small, now and then a big one
-    patter = filtered(drops, 1200, 9000, tilt=0.3)
-    return (0.35 * wash + patter) * swell(3, 0.3, phase=seed)
+        count = a_second * LOOP_SECONDS
+        for start, size, ping in zip(rng.integers(0, length, count), rng.uniform(0.1, 1, count) ** 2,
+                                     rng.integers(len(pings), size=count)):
+            track[start:start + len(pings[ping]), side] += pings[ping] * size
+    track[:len(pings[0])] += track[length:]          # what ran past the end comes round to the start
+    return track[:length] * loudness
+
+
+def drop_ping(hz):
+    """One raindrop: a ping a few milliseconds long that rises a little."""
+    length = seconds(0.008)
+    rising = hz * (1 + 0.3 * np.linspace(0, 1, length))
+    return np.sin(2 * np.pi * np.cumsum(rising) / RATE) * decay(length, 0.002)
 
 
 def wind(seed):
     """Wind: low noise that rises and falls, with a thin whistle on top as it gusts."""
     length = seconds(LOOP_SECONDS)
     body = filtered(noise(length, seed), 80, 700, tilt=0.8) * swell(2, 0.85, phase=seed)
-    whistle = filtered(noise(length, seed + 1), 600, 900) * swell(2, 1.0, phase=seed) ** 3 * 0.3
+    whistle = filtered(noise(length, seed + 1), 400, 600) * swell(2, 1.0, phase=seed) ** 3 * 0.15
     return body + whistle
 
 

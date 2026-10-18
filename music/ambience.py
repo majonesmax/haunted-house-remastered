@@ -21,14 +21,15 @@ import numpy as np
 from music.chiptune import RATE
 from music.house import (NOISES, at, drip, floorboard, panned, rain, seconds, thunder, ticking, wind)
 
-BED_LEVEL = 1300        # a bed's average loudness (the music is 12000, but they're never heard together)
-BED_PEAK = 6000         # a bed's loudest moments are rounded off towards this
-THUNDER_PEAK = 9000
-STEP_PEAK = 5000
-NOISE_PEAK = 4000
+BED_LEVEL = 700         # a bed's average loudness: a background, under what happens in it
+BED_PEAK = 4000         # a bed's loudest moments are rounded off towards this
+THUNDER_LEVEL = 2800    # the one-offs' average loudness while they sound, well above the bed...
+STEP_LEVEL = 3000
+NOISE_LEVEL = 2600
+ONE_OFF_PEAK = 16000    # ...their loudest moments rounded off towards this
 FADE_SECONDS = 1.5      # the beds fade in as the music stops (and out as it starts), and between places
-IDLE_FRAMES = 180       # stand still this long and the house starts to make its noises...
-NOISE_GAP = (4 * 60, 11 * 60)   # ...one every this many frames
+IDLE_FRAMES = 90        # stand still this long and the house starts to make its noises...
+NOISE_GAP = (3 * 60, 8 * 60)    # ...one every this many frames
 STEP_EVERY = 2          # a floorboard for every second footstep (music/events.py's are quick)
 
 
@@ -70,10 +71,15 @@ def bed_pcm(track):
     return (BED_PEAK * np.tanh(scaled / BED_PEAK)).astype(np.int16)
 
 
-def one_off_pcm(sound, peak, pan=0.0):
-    """A one-off sound (mono or stereo) to int16 stereo with its loudest moment at `peak`."""
+def one_off_pcm(sound, level, pan=0.0):
+    """A one-off sound (mono or stereo) to int16 stereo at `level` on average while it sounds (its quiet
+    tail not counted), peaks rounded off below ONE_OFF_PEAK."""
     stereo = sound if sound.ndim == 2 else panned(sound, pan)
-    return (stereo / max(1e-9, np.abs(stereo).max()) * peak).astype(np.int16)
+    loudness = np.abs(stereo).max(axis=1)
+    sounding = stereo[loudness > loudness.max() * 0.1]
+    average = np.sqrt((sounding ** 2).mean() * 2)   # both sides together, as a centred sound
+    scaled = stereo / max(1e-9, average) * level
+    return (ONE_OFF_PEAK * np.tanh(scaled / ONE_OFF_PEAK)).astype(np.int16)
 
 
 # --- playing it -----------------------------------------------------------------------------------------
@@ -94,10 +100,10 @@ class Ambience:
 
     def make_all(self):
         """A second or two of work, done once in the background."""
-        self.thunders = [one_off_pcm(thunder(seed), THUNDER_PEAK) for seed in range(4)]
-        self.steps = [one_off_pcm(floorboard(seed), STEP_PEAK) for seed in range(8)]
+        self.thunders = [one_off_pcm(thunder(seed), THUNDER_LEVEL) for seed in range(4)]
+        self.steps = [one_off_pcm(floorboard(seed), STEP_LEVEL) for seed in range(8)]
         pans = iter(np.random.default_rng(1).uniform(-0.8, 0.8, 2 * len(NOISES)))
-        self.noises = [one_off_pcm(make(seed), NOISE_PEAK, next(pans))
+        self.noises = [one_off_pcm(make(seed), NOISE_LEVEL, next(pans))
                        for make in NOISES.values() for seed in (1, 2)]
         for name, make in PLACES.items():
             self.beds[name] = bed_pcm(make())
@@ -184,15 +190,31 @@ class Ambience:
         return bed[(start + np.arange(count)) % len(bed)]
 
 
+def attic_visit():
+    """To listen to: 30 seconds in the attic - walking for 8, then standing still while the house speaks."""
+    track = np.tile(bed_pcm(attic()), (2, 1))[:seconds(30)].astype(np.float32)
+    steps = [one_off_pcm(floorboard(seed), STEP_LEVEL) for seed in range(8)]
+    for number in range(17):
+        begin = seconds(1 + number * 0.45)
+        track[begin:begin + len(steps[number % 8])] += steps[number % 8]
+    for number, make in enumerate(NOISES.values()):
+        noise = one_off_pcm(make(number), NOISE_LEVEL, pan=(-0.6, 0.6)[number % 2])
+        begin = seconds(10 + number * 3.3)
+        take = min(len(noise), len(track) - begin)
+        track[begin:begin + take] += noise[:take]
+    return np.clip(track, -32767, 32767).astype(np.int16)
+
+
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = os.path.join(root, "shots", "ambience")
     os.makedirs(out, exist_ok=True)
     sounds = {name: bed_pcm(make()) for name, make in PLACES.items()}
-    sounds.update({f"thunder_{seed}": one_off_pcm(thunder(seed), THUNDER_PEAK) for seed in range(4)})
-    steps = [one_off_pcm(floorboard(seed), STEP_PEAK) for seed in range(8)]
+    sounds.update({f"thunder_{seed}": one_off_pcm(thunder(seed), THUNDER_LEVEL) for seed in range(4)})
+    steps = [one_off_pcm(floorboard(seed), STEP_LEVEL) for seed in range(8)]
     sounds["floorboards"] = np.concatenate(steps)
-    sounds.update({f"noise_{name}": one_off_pcm(make(1), NOISE_PEAK) for name, make in NOISES.items()})
+    sounds.update({f"noise_{name}": one_off_pcm(make(1), NOISE_LEVEL) for name, make in NOISES.items()})
+    sounds["attic_visit"] = attic_visit()
     for name, pcm in sounds.items():
         path = os.path.join(out, f"{name}.wav")
         with wave.open(path, "wb") as out_file:

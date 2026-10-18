@@ -221,7 +221,7 @@ class GameWindow:
         self.show_note(self.look.name)
 
     def toggle_music(self):
-        self.show_note("MUSIC: " + ("ON" if self.music.toggle() else "OFF"))
+        self.show_note("MUSIC: ON" if self.music.toggle() else "MUSIC: OFF - JUST THE HOUSE")
 
     def toggle_effects(self):
         remastered = self.sound.toggle_effects()
