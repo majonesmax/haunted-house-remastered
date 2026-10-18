@@ -25,3 +25,4 @@ SHOTS = os.path.join(ROOT, "shots")          # development output (screenshots, 
 FONTS = os.path.join(ROOT, "shared", "fonts")
 USER_DIR = ROOT
 SCREENSHOTS = os.path.join(SHOTS, "play")
+RECORDINGS = os.path.join(ROOT, "recordings")   # R in the game: videos, sound, RAM and a log (git-ignored)

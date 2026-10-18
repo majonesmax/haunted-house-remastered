@@ -8,12 +8,16 @@ One frame (GameWindow.run):
     2. the game  one emulator frame (unless paused), and its sound to the speakers
     3. picture   a GameState snapshot of the RAM -> the look draws it (with the story, or the storm's distant
                  lightning: shared/storm.py), and the soundtrack follows it
-    4. show      the current view: the remaster beside the 2600 original, the remaster alone, or the
-                 original alone; with the help overlay (H) on top if it's open
-    5. pace      at the game's 60 frames a second
+    4. extras    the grid's RAM pane follows the game; the recorder (R) saves every look's picture
+    5. show      the current view (app/views.py): the remaster beside the 2600 original, either alone, or
+                 the grid - what you're playing over the other look, the 2600 over its live RAM; with the
+                 help (H) on top if it's open. The window fits any screen; on macOS, fullscreen keeps one
+                 window whatever the view (elsewhere each view gets a new window, which Windows needs)
+    6. pace      at the game's 60 frames a second
 """
 
 import os
+import sys
 import threading
 import time
 
@@ -22,7 +26,10 @@ import pygame
 from PIL import Image
 
 import looks
+from app import views as V
 from app.controls import CONTROLS
+from app.ram_panel import RamPanel
+from app.recorder import Recorder
 from game import guide
 from music import chiptune
 from music.board import SoundBoard
@@ -30,7 +37,7 @@ from music.player import MusicPlayer
 from game import emulator as E
 from game import paths
 from game.state import Game
-from looks.base import SCREEN_H, SCREEN_W, Extras
+from looks.base import SCREEN_W, Extras
 from shared import hud
 from shared.storm import Storm
 
@@ -41,16 +48,15 @@ KEYS = {pygame.K_l: "next_look", pygame.K_d: "toggle_lightning", pygame.K_m: "to
         pygame.K_e: "toggle_effects",
         pygame.K_v: "next_view",
         pygame.K_p: "toggle_pause", pygame.K_s: "screenshot", pygame.K_f: "toggle_fullscreen",
-        pygame.K_h: "toggle_help"}
+        pygame.K_h: "toggle_help", pygame.K_r: "toggle_recording"}
 LEFT_DIFFICULTY_A, LEFT_DIFFICULTY_B = 10, 12  # the Stella core's buttons for the left switch (docs)
 SWITCH_FRAMES = 3                              # hold a switch button this long for the core to see it
-VIEWS = ("both", "remaster", "2600")
-ORIGINAL_W = 320                               # the 2600's 160 x 228 picture, shown at the TV's shape
-GAP = 8
 FPS = 60
+FIT = 0.9                       # a view bigger than this much of the screen opens smaller (the grid)
+KEEP_WINDOW_IN_FULLSCREEN = sys.platform == "darwin"   # Windows needed a new window for each view
 NOTE_FRAMES = 120               # how long a message stays on screen
 NOTE_Y = 182                    # where it goes: the bottom of the view
-WHITE, GREY = (236, 238, 236), (152, 150, 152)
+WHITE, GREY, RED = (236, 238, 236), (152, 150, 152), (230, 40, 40)
 
 
 class GameWindow:
@@ -67,7 +73,11 @@ class GameWindow:
         self.players = {platform: self.music_for(look) for platform, look in self.looks.items()}
         self.music = self.players[look_name]
         self.sound = SoundBoard(self.music)
-        self.audio = E.AudioOut(int(self.core.av_info().timing.sample_rate), mixer=self.sound.mixer)
+        rate = int(self.core.av_info().timing.sample_rate)
+        self.audio = E.AudioOut(rate, mixer=self.sound.mixer)
+        self.recorder = Recorder(paths.RECORDINGS, rate)
+        self.audio.tap = self.recorder.audio_tap
+        self.panel = RamPanel()
         self.note, self.note_frames = "", 0   # a moment's message on screen ("SOUND: ORIGINAL")
         self.view = "both"
         self.paused = self.fullscreen = False
@@ -79,7 +89,9 @@ class GameWindow:
         self.keys_held_off = False     # after the story: the key that ended it isn't passed to the game
         self.scenes_ready = False      # every look's floors drawn (prepare_looks)
         self.storm = Storm()
-        self.picture = None
+        self.state = None
+        self.picture = None             # your look's screen this frame
+        self.other_picture = None       # the other look's, when the grid or the recorder needs it
         self.screen = self.set_mode()
         threading.Thread(target=self.prepare_looks, daemon=True).start()
 
@@ -109,16 +121,32 @@ class GameWindow:
                 continue
             self.sound.holding = False
             if not self.paused:
-                self.step_game()
-                state = self.game.state(self.core.ram)
-                flash, thunder = self.weather(state)
-                self.sound.follow(state, self.intro, thunder)
-                self.picture = self.look.draw(state, self.frame_no, Extras(self.intro, flash))
-                self.frame_no += 1
+                self.play_frame()
             self.show()
             self.note_frames = max(0, self.note_frames - 1)
             clock.tick(FPS)
+        self.stop_recording()
         pygame.quit()
+
+    def play_frame(self):
+        """One frame of the game: run it, hear it, draw it (each look that's needed), record it."""
+        self.step_game()
+        state = self.state = self.game.state(self.core.ram)
+        flash, thunder = self.weather(state)
+        extras = Extras(self.intro, flash)
+        self.sound.follow(state, self.intro, thunder)
+        self.picture = self.look.draw(state, self.frame_no, extras)
+        if self.view == "grid" or self.recorder.active:
+            self.other_picture = self.other_look.draw(state, self.frame_no, extras)
+        self.panel.update(state, self.frame_no)
+        self.record(state)
+        self.frame_no += 1
+
+    @property
+    def other_look(self):
+        """The grid's comparison: the next look after yours."""
+        platforms = sorted(self.looks)
+        return self.looks[platforms[(platforms.index(self.look.platform) + 1) % len(platforms)]]
 
     def handle_input(self):
         """Keys -> the joystick, or a window command. False = quit."""
@@ -157,38 +185,44 @@ class GameWindow:
         self.core.run()
         self.audio.push(self.core.take_audio())
 
+    def record(self, state):
+        if not self.recorder.active:
+            return
+        pictures = {"a2600": np.asarray(self.core.frame), self.look.platform: self.picture,
+                    self.other_look.platform: self.other_picture}
+        details = {"floor": state.floor + 1, "room": state.room, "eyes": list(state.player),
+                   "mode": state.mode, "look": self.look.platform, "view": self.view}
+        self.recorder.frame(pictures, details, state.ram)
+
     # --- showing it ----------------------------------------------------------------------------------
     def canvas(self):
-        """The current view as one RGB array."""
-        original = self.original()
-        if self.view == "remaster":
-            canvas = self.picture.copy()
-        elif self.view == "2600":
-            canvas = original
-        else:
-            gap = np.zeros((SCREEN_H, GAP, 3), np.uint8)
-            canvas = np.concatenate([self.picture, gap, original], axis=1)
+        """The current view as one RGB array (app/views.py), the help and messages on your look."""
+        playing = self.picture.copy()
         if self.help == 1:
-            draw_help(canvas)
+            draw_help(playing)
         elif self.help == 2:
-            draw_how_to_play(canvas)
+            draw_how_to_play(playing)
         if self.note_frames:
-            draw_note(canvas, self.note)
+            draw_note(playing, self.note)
+        grid_extras = None
+        if self.view == "grid":
+            other = self.other_picture if self.other_picture is not None else np.zeros_like(playing)
+            ram_pane = self.panel.draw(self.state) if self.state is not None else None
+            grid_extras = (other, ram_pane, (self.look.name, self.other_look.name))
+        canvas = V.compose(self.view, playing, self.core.frame, grid_extras)
+        if self.recorder.active and self.frame_no // 30 % 2 == 0:
+            draw_recording_light(canvas)
         return canvas
-
-    def original(self):
-        """The emulator's own picture at the remaster's height, in the TV's proportions."""
-        frame = Image.fromarray(np.asarray(self.core.frame))
-        return np.array(frame.resize((ORIGINAL_W, SCREEN_H), Image.NEAREST))
 
     def show(self, loading=False):
         if self.picture is None:
             return
         canvas = self.picture if loading else self.canvas()
         surface = pygame.surfarray.make_surface(canvas.swapaxes(0, 1))
-        if surface.get_size() != self.screen.get_size():
-            self.screen = self.set_mode()
-        self.screen.blit(surface, (0, 0))
+        if surface.get_size() == self.screen.get_size():
+            self.screen.blit(surface, (0, 0))
+        else:   # fullscreen, a screen too small for the view, or a view just changed: fit it in
+            V.fit_into(surface, self.screen)
         pygame.display.flip()
 
     def loading_screen(self, frame_no):
@@ -205,19 +239,29 @@ class GameWindow:
         return screen
 
     def size(self):
-        widths = {"both": SCREEN_W + GAP + ORIGINAL_W, "remaster": SCREEN_W, "2600": ORIGINAL_W}
-        return widths[self.view], SCREEN_H
+        return V.size(self.view)
 
     def set_mode(self):
-        """The window for the current view, drawn at a fixed size and shown scaled (SCALED). pygame-ce can
-        crash or hang re-calling set_mode with SCALED, so each new size gets a new window (as Adventure
-        Forever found)."""
+        """The window for the current view, its picture shown scaled to fit (SCALED). A view bigger than the
+        screen allows (the grid, on a laptop) opens at a size that fits, and show() shrinks the picture
+        into it. On macOS, fullscreen keeps its window whatever the view: a new window would leave
+        fullscreen and come back, animated, on every V. Elsewhere, and out of fullscreen, each new size
+        gets a new window: pygame-ce can crash or hang re-calling set_mode with SCALED (as Adventure
+        Forever found), and Windows needed it."""
+        pygame.display.set_caption(f"{paths.APP_NAME} - {self.look.name}")
+        if self.fullscreen and KEEP_WINDOW_IN_FULLSCREEN and pygame.display.get_surface() is not None:
+            return self.screen
         if pygame.display.get_surface() is not None:
             pygame.display.quit()
             pygame.display.init()
-        pygame.display.set_caption(f"{paths.APP_NAME} - {self.look.name}")
-        flags = pygame.SCALED | pygame.RESIZABLE | (pygame.FULLSCREEN if self.fullscreen else 0)
-        return pygame.display.set_mode(self.size(), flags)
+            pygame.display.set_caption(f"{paths.APP_NAME} - {self.look.name}")
+        width, height = self.size()
+        screen_w, screen_h = pygame.display.get_desktop_sizes()[0]
+        shrink = min(1.0, FIT * screen_w / width, FIT * screen_h / height)
+        flags = pygame.SCALED | pygame.RESIZABLE
+        if self.fullscreen and not KEEP_WINDOW_IN_FULLSCREEN:
+            flags |= pygame.FULLSCREEN
+        return pygame.display.set_mode((int(width * shrink), int(height * shrink)), flags)
 
     # --- window commands -----------------------------------------------------------------------------
     def toggle_lightning(self):
@@ -227,7 +271,8 @@ class GameWindow:
         self.show_note("LIGHTNING: " + ("ON (B)" if self.lightning else "OFF (A)"))
 
     def next_view(self):
-        self.view = VIEWS[(VIEWS.index(self.view) + 1) % len(VIEWS)]
+        """V: side by side -> the remaster -> the 2600 -> the grid."""
+        self.view = V.VIEWS[(V.VIEWS.index(self.view) + 1) % len(V.VIEWS)]
         self.screen = self.set_mode()
 
     def toggle_pause(self):
@@ -267,13 +312,39 @@ class GameWindow:
         self.help = (self.help + 1) % 3
 
     def toggle_fullscreen(self):
+        """F. On macOS the same window grows into fullscreen, and coming out, a new window opens at the view's
+        own size (whatever views were chosen meanwhile). Elsewhere a new window either way."""
         self.fullscreen = not self.fullscreen
-        self.screen = self.set_mode()
+        if self.fullscreen and KEEP_WINDOW_IN_FULLSCREEN:
+            pygame.display.toggle_fullscreen()
+        else:
+            self.screen = self.set_mode()
+
+    def toggle_recording(self):
+        """R: start or stop recording (app/recorder.py)."""
+        if self.recorder.active:
+            self.stop_recording()
+            return
+        folder = self.recorder.start()
+        self.show_note("RECORDING" if folder else "RECORDING NEEDS FFMPEG")
+
+    def stop_recording(self):
+        finished = self.recorder.stop()
+        if finished:
+            folder, frames = finished
+            print(f"recording saved: {folder} ({frames} frames)", flush=True)
+            self.show_note(f"SAVED {frames} FRAMES")
 
     def screenshot(self):
         os.makedirs(paths.SCREENSHOTS, exist_ok=True)
         name = time.strftime("haunted-%Y%m%d-%H%M%S.png")
         Image.fromarray(self.canvas()).save(os.path.join(paths.SCREENSHOTS, name))
+
+
+def draw_recording_light(canvas):
+    """A blinking red dot and REC, top left: on the window, never in the recording."""
+    canvas[6:14, 6:14] = RED
+    hud.draw_text(canvas, "REC", 18, 6, RED)
 
 
 def draw_note(canvas, text):
