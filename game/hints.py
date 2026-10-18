@@ -107,3 +107,21 @@ def across(from_room: int, to_room: int) -> str:
 def urn_just_whole(before: GameState, after: GameState) -> bool:
     """Did the urn become whole in your hands between these two states? (For the note that says so.)"""
     return holding_whole_urn(after) and not holding_whole_urn(before)
+
+
+def thing_name(state: GameState, number: int) -> str:
+    """What an item is called in a message: THE KEY, THE SCEPTER, THE PIECE, THE URN (one piece or more)."""
+    if number == 0:
+        return "THE KEY"
+    if number == 1:
+        return "THE SCEPTER"
+    return "THE PIECE" if PIECES_IN.get(state.items[number].shape, 1) == 1 else "THE URN"
+
+
+def swap_note(before: GameState, after: GameState) -> list[str] | None:
+    """You hold one thing at a time - joined pieces are one urn - so taking something puts down what you
+    held. The lines that say so when it happens, or None."""
+    if before.carried is None or after.carried is None or before.carried == after.carried:
+        return None
+    put_down, taken = thing_name(before, before.carried), thing_name(after, after.carried)
+    return [f"YOU PUT DOWN {put_down}", f"TO TAKE {taken}.", "YOU HOLD ONE THING AT A TIME."]

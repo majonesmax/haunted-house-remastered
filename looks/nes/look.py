@@ -161,7 +161,10 @@ class NesLook(FloorLook):
         carried_x = SCREEN_W // 2 - SLOT - 12
         hud.draw_text(screen, "HOLD", carried_x - 4, LABEL_Y, GREY)
         self.draw_carried(screen, state, frame_no, carried_x, VALUE_Y - 4)
-        self.draw_urn(screen, state, frame_no, SCREEN_W // 2 + 4, VALUE_Y - 4)
+        urn_x = SCREEN_W // 2 + 4
+        urn_width = 3 * SLOT + 4                       # three slots, 2 pixels apart
+        hud.draw_text(screen, "URN", urn_x + (urn_width - hud.text_width("URN")) // 2, LABEL_Y, GREY)
+        self.draw_urn(screen, state, frame_no, urn_x, VALUE_Y - 4)   # how much of it is mended - not held
         hud.draw_text(screen, "LIVES", VIEW_X + VIEW_W - 40, LABEL_Y, GREY)
         self.draw_lives(screen, state, frame_no, VIEW_X + VIEW_W - 40, VALUE_Y)
         floors = self.pack.info.get("floors") or [f"FLOOR {number}" for number in range(1, 5)]

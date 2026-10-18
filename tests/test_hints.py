@@ -105,11 +105,28 @@ def check_get_out(lab: Lab, game: Game) -> None:
     check("whole urn, two floors up: down the stairs", down, " / ".join(said))
 
 
+def check_swap(lab: Lab, game: Game) -> None:
+    """Taking the scepter while holding a piece says the piece was put down (the game swaps them)."""
+    start_game(lab, 1)
+    lab.poke(M.CARRIED, 2)
+    before = game.state(lab.ram)
+    lab.poke(M.CARRIED, 1)
+    said = hints.swap_note(before, game.state(lab.ram)) or []
+    expected = ["YOU PUT DOWN THE PIECE", "TO TAKE THE SCEPTER.", "YOU HOLD ONE THING AT A TIME."]
+    check("taking the scepter while holding a piece: it says the piece was put down", said == expected,
+          " / ".join(said))
+    problems = fits(said)
+    check("the swap note fits the screen and the font", not problems, ", ".join(problems))
+    same = game.state(lab.ram)
+    check("no note when nothing changed hands", hints.swap_note(same, same) is None)
+
+
 def main() -> int:
     lab, game = Lab(), Game()
     check_every_game(lab, game)
     check_ways(lab, game)
     check_get_out(lab, game)
+    check_swap(lab, game)
     return 1 if failures else 0
 
 

@@ -68,8 +68,9 @@ each game number's rules are on the title screen.
   getting out with it is. (When the urn comes together, the game reminds you.)
 - **Light a match (Space) to see - and to pick anything up.** Things only show close to a burning match,
   and you take one by walking into it while the match is lit. Without a match, you walk straight past.
-- **You hold one thing at a time.** Walk into something else (match lit) and you swap. Carry a piece into
-  another piece to join them.
+- **You hold one thing at a time** - and joined pieces are one thing, the urn so far. Walk into something
+  else (match lit) and you swap: take the scepter and you put the urn down. Carry a piece into another piece
+  to join them. At the top of the screen, HOLD is what's in your hand; URN is how much of it is mended.
 - **The pieces are somewhere different every game**, on any of the four floors. The stairs are at the
   rooms' edges: walk off them to climb.
 - **A match burns about 20 seconds**, and a monster in the room blows it out. Fewer matches, better score.

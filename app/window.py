@@ -144,8 +144,8 @@ class GameWindow:
         assert self.core.ram is not None   # the ROM was loaded when the window was made
         state = self.state = self.game.state(self.core.ram)
         state.lights_on = self.lights_on
-        if before is not None and hints.urn_just_whole(before, state):
-            self.show_note(hints.WHOLE_URN_NOTE, HINT_FRAMES)   # it isn't won until it's out of the door
+        if before is not None:
+            self.note_what_changed(before, state)
         flash, thunder = self.weather(state)
         extras = Extras(self.intro, flash)
         self.sound.follow(state, self.intro, thunder)
@@ -331,6 +331,15 @@ class GameWindow:
         self.lights_on = not self.lights_on
         turned_on = ["LIGHTS ON - A CHEAT.", "PICKING UP NEEDS A MATCH LIT.", "O AGAIN TURNS THEM OFF."]
         self.show_note(turned_on if self.lights_on else "LIGHTS OFF")
+
+    def note_what_changed(self, before: GameState, state: GameState) -> None:
+        """Say what the original doesn't: the urn whole isn't won yet; taking something put down the rest."""
+        if hints.urn_just_whole(before, state):
+            self.show_note(hints.WHOLE_URN_NOTE, HINT_FRAMES)   # it isn't won until it's out of the door
+            return
+        swapped = hints.swap_note(before, state)
+        if swapped:
+            self.show_note(swapped, HINT_FRAMES)
 
     def give_hint(self) -> None:
         """G: what you need next, and which way (game/hints.py) - the same until something changes."""
