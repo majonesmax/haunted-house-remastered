@@ -54,6 +54,7 @@ Run each with Python from the repository's root.
 | `tools/preview.py` | every look in every scripted situation, beside the original, as one picture in `shots/` |
 | `tests/golden.py` | every look still draws exactly the same pixels in those situations (`--update` after a change you meant) |
 | `tests/test_facing.py` | monsters face the way they walk |
+| `tests/test_hints.py` | G's hints (`game/hints.py`) fit the screen and the font in every game, and point the right way |
 | `tests/test_events.py` | each sound effect fires on the right event in the running game |
 | `tools/verify_ram.py` | plays scripted experiments and checks each claim about RAM and the ROM's tables |
 | `tools/verify_games.py` | checks every rule that changes with the game number, in all nine games |

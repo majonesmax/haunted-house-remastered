@@ -37,6 +37,7 @@ KEYS (in the game, H shows them all)
   R                record gameplay on/off (saved to your Movies / Videos folder, in "Haunted
                    House"; needs ffmpeg installed: https://ffmpeg.org/download.html)
   P                pause
+  G                a hint: the goal, then which way to go, then a tip (press again for more)
   H                the keys, then how to play
   Esc              quit
 

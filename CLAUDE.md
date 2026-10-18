@@ -31,6 +31,7 @@ python play.py --grid                      # ...in the grid: both looks, the 260
 python tools/preview.py                    # the look in every situation, as one PNG - look at it
 python tests/golden.py                     # every look still draws the same pixels
 python tests/test_facing.py                # monsters face the way they walk
+python tests/test_hints.py                 # G's hints fit the screen and point the right way
 python packs/classic/source/draw.py        # regenerate the classic pack's PNGs from its text art
 python packs/nocturne/source/draw.py       # ...and the nocturne pack's (the SNES look's own)
 python music/chiptune.py                   # the classic soundtrack as WAVs in shots/music/, to listen to

@@ -30,7 +30,7 @@ from app import views as V
 from app.controls import CONTROLS
 from app.ram_panel import RamPanel
 from app.recorder import Recorder
-from game import guide
+from game import guide, hints
 from music import chiptune
 from music.board import SoundBoard
 from music.player import MusicPlayer
@@ -48,14 +48,17 @@ KEYS = {pygame.K_l: "next_look", pygame.K_d: "toggle_lightning", pygame.K_m: "to
         pygame.K_e: "toggle_effects",
         pygame.K_v: "next_view",
         pygame.K_p: "toggle_pause", pygame.K_s: "screenshot", pygame.K_f: "toggle_fullscreen",
-        pygame.K_h: "toggle_help", pygame.K_r: "toggle_recording"}
+        pygame.K_h: "toggle_help", pygame.K_r: "toggle_recording", pygame.K_g: "give_hint"}
 LEFT_DIFFICULTY_A, LEFT_DIFFICULTY_B = 10, 12  # the Stella core's buttons for the left switch (docs)
 SWITCH_FRAMES = 3                              # hold a switch button this long for the core to see it
 FPS = 60
 FIT = 0.9                       # a view bigger than this much of the screen opens smaller (the grid)
 KEEP_WINDOW_IN_FULLSCREEN = sys.platform == "darwin"   # Windows needed a new window for each view
 NOTE_FRAMES = 120               # how long a message stays on screen
+HINT_FRAMES = 360               # ...and a hint, which takes longer to read
+HINT_FORGETS = 15 * 60          # frames after which the next G starts the hints from the goal again
 NOTE_Y = 182                    # where it goes: the bottom of the view
+NOTE_LINE = 11                  # pixels from one line of a message to the next
 WHITE, GREY, RED = (236, 238, 236), (152, 150, 152), (230, 40, 40)
 
 
@@ -78,7 +81,8 @@ class GameWindow:
         self.recorder = Recorder(paths.RECORDINGS, rate)
         self.audio.tap = self.recorder.audio_tap
         self.panel = RamPanel()
-        self.note, self.note_frames = "", 0   # a moment's message on screen ("SOUND: ORIGINAL")
+        self.note, self.note_frames = [], 0   # a moment's message on screen: its lines ("SOUND: ORIGINAL")
+        self.hint_level, self.last_hint = 0, None   # G: how many hints in a row, and the frame of the last
         self.view = "both"
         self.paused = self.fullscreen = False
         self.help = 0   # H: 0 hidden, 1 the keys, 2 how to play
@@ -305,8 +309,18 @@ class GameWindow:
         remastered = self.sound.toggle_effects()
         self.show_note("SOUND: " + ("REMASTERED" if remastered else "ORIGINAL 2600"))
 
-    def show_note(self, text):
-        self.note, self.note_frames = text, NOTE_FRAMES
+    def show_note(self, text, frames=NOTE_FRAMES):
+        """A message on screen for a moment: one line, or a list of them."""
+        self.note, self.note_frames = [text] if isinstance(text, str) else text, frames
+
+    def give_hint(self):
+        """G: the goal, then the way, then tips - one more each press (game/hints.py)."""
+        if self.state is None:
+            return
+        recent = self.last_hint is not None and self.frame_no - self.last_hint < HINT_FORGETS
+        self.hint_level = self.hint_level + 1 if recent else 0
+        self.last_hint = self.frame_no
+        self.show_note(hints.hint(self.state, self.game.rom, self.hint_level), HINT_FRAMES)
 
     def toggle_help(self):
         """H: the keys, then how to play, then neither."""
@@ -348,11 +362,13 @@ def draw_recording_light(canvas):
     hud.draw_text(canvas, "REC", 18, 6, RED)
 
 
-def draw_note(canvas, text):
-    """A message across the bottom of the view, on a dark band (clear of the status and the floor's name)."""
-    top = NOTE_Y
-    canvas[top - 4:top + 12, 8:SCREEN_W - 8] //= 4
-    hud.draw_text(canvas, text, (SCREEN_W - hud.text_width(text)) // 2, top, WHITE)
+def draw_note(canvas, lines):
+    """A message across the bottom of the view, on a dark band (clear of the status and the floor's name);
+    more lines rise above the first."""
+    top = NOTE_Y - (len(lines) - 1) * NOTE_LINE
+    canvas[top - 4:NOTE_Y + 12, 8:SCREEN_W - 8] //= 4
+    for row, line in enumerate(lines):
+        hud.draw_text(canvas, line, (SCREEN_W - hud.text_width(line)) // 2, top + row * NOTE_LINE, WHITE)
 
 
 def draw_how_to_play(canvas):

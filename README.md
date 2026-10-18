@@ -70,6 +70,8 @@ python play.py                         # drop your ROM onto the window the first
 More: `python play.py --look snes`, `--grid`, `--pack <name>`, `--help`. Recording (R) needs
 [ffmpeg](https://ffmpeg.org). On Linux, sound needs your distribution's PortAudio (e.g. `libportaudio2`).
 
+Stuck? **G** gives a hint - the goal, then which way to go - without marking anything on screen.
+
 New to the game? Press **H** twice in the game: what you're trying to do, and the rules the original never
 explains. Each game number's rules show on the title screen.
 
@@ -118,6 +120,7 @@ In the game, **H** shows all of these.
 | D | the left difficulty switch: lightning on (the default) or off |
 | R | record (videos of each look and the 2600, the sound, the RAM, a log) |
 | S / P / F | screenshot / pause / fullscreen |
+| G | a hint: the goal, then which way to go, then a tip - press again for more |
 | H | the keys, then how to play |
 | Esc | quit |
 
