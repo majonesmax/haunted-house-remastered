@@ -128,6 +128,10 @@ class Ambience:
         for name, make in PLACES.items():
             self.beds[name] = bed_pcm(make())
 
+    @property
+    def ready(self):
+        return len(self.beds) == len(PLACES)
+
     # --- following the game ---
     def follow(self, state, intro, quiet):
         """Once a frame. quiet: no music is playing."""

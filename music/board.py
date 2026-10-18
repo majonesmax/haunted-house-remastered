@@ -30,6 +30,7 @@ class SoundBoard:
         self.watcher = EventWatcher()
         self.ambience = Ambience()
         self.remastered = True
+        self.holding = True     # silent while the app loads (app/window.py); nothing is mixed
         self.voices = []        # [samples, position] of each effect playing
         self.lock = threading.Lock()
 
@@ -49,6 +50,11 @@ class SoundBoard:
             else:
                 self.play(name)
 
+    @property
+    def ready(self):
+        """Is everything heard made: the ambience, and the music for the current look?"""
+        return self.ambience.ready and self.music.ready
+
     def play(self, name):
         with self.lock:
             self.voices.append([self.sound_sets[self.music.synth_name][name], 0])  # the look's own
@@ -64,6 +70,8 @@ class SoundBoard:
 
     def mixer(self, game_sound):
         """The sound card's callback: the chosen effects (with the ambience under them), then the music."""
+        if self.holding:
+            return np.zeros_like(game_sound)
         sound = np.zeros_like(game_sound) if self.remastered else game_sound
         if self.remastered and not self.music.paused:
             sound = mix(self.ambience.render(len(game_sound)), self.next_effects(len(game_sound)))

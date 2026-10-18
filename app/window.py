@@ -1,6 +1,8 @@
 """The game window: runs the emulator, asks the look for a picture, and shows it.
 
 One frame (GameWindow.run):
+    0. loading   at launch, until every look's floors, soundtrack and the ambience are made (a few
+                 seconds), a quiet loading screen - so the background work is done before any sound plays
     1. input     keys -> the joystick and the console's switches, or window commands (app/controls.py); at
                  launch, the story shows until any key is pressed
     2. the game  one emulator frame (unless paused), and its sound to the speakers
@@ -75,6 +77,7 @@ class GameWindow:
         self.frame_no = 0
         self.intro = True              # the story, at launch, until a key is pressed
         self.keys_held_off = False     # after the story: the key that ended it isn't passed to the game
+        self.scenes_ready = False      # every look's floors drawn (prepare_looks)
         self.storm = Storm()
         self.picture = None
         self.screen = self.set_mode()
@@ -85,11 +88,26 @@ class GameWindow:
         for look in self.looks.values():
             for floor in range(4):
                 look.scene(floor)
+        self.scenes_ready = True
+
+    @property
+    def loading(self):
+        """Still making things in the background? While it is, the game waits and nothing is heard."""
+        players_ready = all(player.ready for player in self.players.values())
+        return not (self.scenes_ready and players_ready and self.sound.ambience.ready)
 
     # --- the loop ------------------------------------------------------------------------------------
     def run(self):
         clock = pygame.time.Clock()
+        loading_frames = 0
         while self.handle_input():
+            if self.loading:
+                self.picture = self.loading_screen(loading_frames)
+                loading_frames += 1
+                self.show(loading=True)
+                clock.tick(FPS)
+                continue
+            self.sound.holding = False
             if not self.paused:
                 self.step_game()
                 state = self.game.state(self.core.ram)
@@ -163,15 +181,28 @@ class GameWindow:
         frame = Image.fromarray(np.asarray(self.core.frame))
         return np.array(frame.resize((ORIGINAL_W, SCREEN_H), Image.NEAREST))
 
-    def show(self):
+    def show(self, loading=False):
         if self.picture is None:
             return
-        canvas = self.canvas()
+        canvas = self.picture if loading else self.canvas()
         surface = pygame.surfarray.make_surface(canvas.swapaxes(0, 1))
         if surface.get_size() != self.screen.get_size():
             self.screen = self.set_mode()
         self.screen.blit(surface, (0, 0))
         pygame.display.flip()
+
+    def loading_screen(self, frame_no):
+        """While the app gets ready: the eyes in the dark, blinking, and a word."""
+        width, height = self.size()
+        screen = np.zeros((height, width, 3), np.uint8)
+        eyes = self.look.picture("eyes_blink" if frame_no % 90 < 6 else "eyes_centre", frame_no)
+        if eyes is not None:
+            left, top = (width - eyes.shape[1]) // 2, height // 2 - eyes.shape[0]
+            screen[top:top + eyes.shape[0], left:left + eyes.shape[1]] = np.where(
+                eyes[..., 3:] > 0, eyes[..., :3], 0)
+        word = "LOADING" + "." * (frame_no // 20 % 4)
+        hud.draw_text(screen, word, (width - hud.text_width("LOADING...")) // 2, height // 2 + 16, GREY)
+        return screen
 
     def size(self):
         widths = {"both": SCREEN_W + GAP + ORIGINAL_W, "remaster": SCREEN_W, "2600": ORIGINAL_W}
