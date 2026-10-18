@@ -8,7 +8,8 @@ packs/classic.
 
 import numpy as np
 
-from looks.base import CELL_PX, SCREEN_W, VIEW_H, VIEW_W, VIEW_X, VIEW_Y, FloorLook
+from looks.base import FloorLook
+from looks.layout import SCREEN_H, SCREEN_W, VIEW_H, VIEW_W, VIEW_X, VIEW_Y
 from shared import hud
 from shared import palettes as PAL
 from shared.pixelart import blit
@@ -26,7 +27,10 @@ LIGHTNING_ROWS = 2                             # walls in a lightning flash: two
 ROW = 0x10                                     # the NES palette: 4 rows of 16, darkest first
 FIRST_BLACK_HUE = 0x0D                         # hues $D-$F of each row are black (and $2D, $3D greys)
 URN_SHADES = 2                                 # the urn art's two colours: its fill and its shade
-STATUS_Y = VIEW_Y + VIEW_H + 12
+LABEL_Y, VALUE_Y = 6, 18                       # the status band above the view: labels, then values
+NAME_Y = VIEW_Y + VIEW_H + 14                  # the floor's name, below the view
+SLOT = 18                                      # an item box / urn slot
+URN_PIECES = {2: (2,), 3: (3,), 4: (4,), 5: (2, 3), 6: (2, 4), 7: (3, 4), 8: (2, 3, 4)}  # shape -> pieces
 MATCH_SECONDS = 20
 
 
@@ -91,35 +95,68 @@ class NesLook(FloorLook):
 
     # --- the status line, title and win ---------------------------------------------------------------
     def draw_status(self, screen, state, frame_no):
-        hud.draw_text(screen, f"GAME {state.game}", VIEW_X, 12, GREY)
+        """Above the view: matches used (and the one burning), what's carried, the urn so far, lives.
+        Below it: the floor's name (from the pack), the game and the floor number."""
+        hud.draw_text(screen, "MATCHES", VIEW_X, LABEL_Y, GREY)
+        hud.draw_text(screen, f"{state.matches_used:02d}", VIEW_X, VALUE_Y, WHITE)
+        self.draw_match(screen, state, VIEW_X + 22, VALUE_Y)
+        carried_x = SCREEN_W // 2 - SLOT - 12
+        hud.draw_text(screen, "HOLD", carried_x - 4, LABEL_Y, GREY)
+        self.draw_carried(screen, state, frame_no, carried_x, VALUE_Y - 4)
+        self.draw_urn(screen, state, frame_no, SCREEN_W // 2 + 4, VALUE_Y - 4)
+        hud.draw_text(screen, "LIVES", VIEW_X + VIEW_W - 40, LABEL_Y, GREY)
+        self.draw_lives(screen, state, frame_no, VIEW_X + VIEW_W - 40, VALUE_Y)
+        floors = self.pack.info.get("floors") or [f"FLOOR {number}" for number in range(1, 5)]
+        name = floors[state.floor].upper()
+        hud.draw_text(screen, name, centred(name), NAME_Y, WHITE)
+        hud.draw_text(screen, f"GAME {state.game}", VIEW_X, SCREEN_H - 14, DIM_GREY)
         floor = f"FLOOR {state.floor + 1}"
-        hud.draw_text(screen, floor, VIEW_X + VIEW_W - hud.text_width(floor), 12, GREY)
-        top = STATUS_Y
-        hud.frame_box(screen, VIEW_X, top - 6, VIEW_X + VIEW_W - 1, top + 38, DIM_GREY)
-        hud.draw_text(screen, "MATCHES", VIEW_X + 8, top, GREY)
-        hud.draw_text(screen, f"{state.matches_used:02d}", VIEW_X + 8, top + 14, WHITE, scale=2)
-        self.draw_match(screen, state, VIEW_X + 48, top + 14)
-        self.draw_carried(screen, state, frame_no, SCREEN_W // 2 - CELL_PX // 2, top + 2)
-        hud.draw_text(screen, "LIVES", VIEW_X + VIEW_W - 48, top, GREY)
-        hud.draw_text(screen, str(state.lives), VIEW_X + VIEW_W - 32, top + 14, WHITE, scale=2)
+        hud.draw_text(screen, floor, VIEW_X + VIEW_W - hud.text_width(floor), SCREEN_H - 14, DIM_GREY)
 
     def draw_match(self, screen, state, x, y):
         """A match burning down while lit: a flame over a stick as long as the seconds left."""
         if not state.match_lit:
             return
         length = max(1, state.match_seconds)
-        screen[y + 6:y + 8, x:x + length] = EMBER
-        screen[y + 4:y + 10, x + length:x + length + 3] = FLAME
+        screen[y + 3:y + 5, x:x + length] = EMBER
+        screen[y + 1:y + 7, x + length:x + length + 3] = FLAME
 
     def draw_carried(self, screen, state, frame_no, x, y):
-        hud.frame_box(screen, x - 4, y - 4, x + CELL_PX + 3, y + CELL_PX + 3, DIM_GREY)
+        hud.frame_box(screen, x, y, x + SLOT + 1, y + SLOT + 1, DIM_GREY)
         if state.carried is None:
             return
         item = state.items[state.carried]
         name = "key" if item.number == 0 else "scepter" if item.number == 1 else f"urn{item.shape}"
-        sprite = self.picture(name, frame_no)
+        self.draw_in_slot(screen, self.picture(name, frame_no), x, y)
+
+    def draw_urn(self, screen, state, frame_no, x, y):
+        """The urn so far: three slots, one per piece. Filled: the pieces you hold, or else the biggest group
+        of pieces joined together (a lone piece on the floor doesn't count)."""
+        joined = ()
+        if state.carried is not None and state.carried >= 2:
+            joined = URN_PIECES.get(state.items[state.carried].shape, ())
+        else:
+            groups = [URN_PIECES.get(item.shape, ()) for item in state.items[2:]]
+            biggest = max(groups, key=len)
+            joined = biggest if len(biggest) > 1 else ()
+        for slot, piece in enumerate((2, 3, 4)):
+            left = x + slot * (SLOT + 2)
+            hud.frame_box(screen, left, y, left + SLOT + 1, y + SLOT + 1, DIM_GREY)
+            if piece in joined:
+                self.draw_in_slot(screen, self.picture(f"urn{piece}", frame_no), left, y)
+
+    def draw_lives(self, screen, state, frame_no, x, y):
+        eyes = self.picture("eyes_centre", frame_no)
+        if eyes is not None:
+            blit(screen, eyes, x, y + 1)
+        hud.draw_text(screen, f"X{state.lives}", x + 16, y, WHITE)
+
+    def draw_in_slot(self, screen, sprite, x, y):
         if sprite is not None:
-            blit(screen, sprite, x + (CELL_PX - sprite.shape[1]) // 2, y + (CELL_PX - sprite.shape[0]) // 2)
+            blit(screen, sprite, x + 1 + (SLOT - sprite.shape[1]) // 2, y + 1 + (SLOT - sprite.shape[0]) // 2)
+
+    def outline_colour(self):
+        return BLACK
 
     def draw_title(self, screen, state, frame_no):
         game_over = state.lives == 0

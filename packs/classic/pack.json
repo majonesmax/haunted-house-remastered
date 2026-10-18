@@ -1,4 +1,10 @@
 {
   "title": "Classic",
-  "description": "The NES look's own pack: glowing eyes, a sheet ghost, a purple bat, red, orange and blue tarantulas, and brick walls in each floor's original colour."
+  "description": "The NES look's own pack: a Victorian manor - a damask-papered foyer, a red dining hall, a green conservatory and a dusty attic - with glowing eyes, a sheet ghost, a purple bat and red, orange and blue tarantulas.",
+  "floors": [
+    "The Foyer",
+    "The Dining Hall",
+    "The Conservatory",
+    "The Attic"
+  ]
 }
