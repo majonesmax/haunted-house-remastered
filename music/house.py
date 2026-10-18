@@ -60,20 +60,20 @@ def swell(cycles, depth, phase=0.0):
     return (1 - depth + depth * (0.5 + 0.5 * np.sin(2 * np.pi * cycles * t + phase)))[:, None]
 
 
-def rain(seed, drops_a_second=40):
+def rain(seed, drops_a_second=25):
     """Rain: separate drops - each a tiny ping, some near and clear, many far and soft - over a low murmur.
     (A wash of plain noise, however filtered, sounds like static.)"""
     length = seconds(LOOP_SECONDS)
     rng = np.random.default_rng(seed)
-    near = scatter_drops(rng, length, drops_a_second, 0.6)
-    far = filtered(scatter_drops(rng, length, drops_a_second * 6, 0.25), 200, 2500)
+    near = filtered(scatter_drops(rng, length, drops_a_second, 0.6), 300, 4000)  # no sharp clicks
+    far = filtered(scatter_drops(rng, length, drops_a_second * 8, 0.25), 200, 1800)
     murmur = filtered(noise(length, seed), 60, 900, tilt=1.0)
     return (near + 0.35 * far + 0.12 * murmur) * swell(3, 0.3, phase=seed)
 
 
 def scatter_drops(rng, length, a_second, loudness):
     """`a_second` drops a second on each side, at random, mostly small; looping round the end."""
-    pings = [drop_ping(hz) for hz in np.geomspace(1500, 5000, 12)]
+    pings = [drop_ping(hz) for hz in np.geomspace(700, 2400, 12)]
     track = np.zeros((length + len(pings[0]), 2))
     for side in range(2):
         count = a_second * LOOP_SECONDS
@@ -85,10 +85,12 @@ def scatter_drops(rng, length, a_second, loudness):
 
 
 def drop_ping(hz):
-    """One raindrop: a ping a few milliseconds long that rises a little."""
-    length = seconds(0.008)
+    """One raindrop: a soft ping a few milliseconds long that rises a little - eased in, so it doesn't
+    click."""
+    length = seconds(0.02)
     rising = hz * (1 + 0.3 * np.linspace(0, 1, length))
-    return np.sin(2 * np.pi * np.cumsum(rising) / RATE) * decay(length, 0.002)
+    ease_in = np.minimum(1, np.arange(length) / seconds(0.0015))
+    return np.sin(2 * np.pi * np.cumsum(rising) / RATE) * decay(length, 0.004) * ease_in
 
 
 def wind(seed):

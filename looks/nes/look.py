@@ -99,8 +99,13 @@ class NesLook(FloorLook):
     def distant_flash(self, screen, level):
         """Lightened towards the palette's deep blue, then back into the palette: black steps through the
         blues as it fades (a grey-blue would snap to grey)."""
-        lightened = np.clip(screen + NES_SKY_FLASH * level, 0, 255).astype(np.uint8)
-        return self.to_nes(lightened)
+        red, green, blue = (screen[..., channel].astype(np.int32) for channel in range(3))
+        packed = (red << 16) | (green << 8) | blue
+        colours, where = np.unique(packed, return_inverse=True)  # the screen's few colours, each done once
+        rgb = np.stack([colours >> 16, (colours >> 8) & 255, colours & 255], axis=1)
+        lightened = np.clip(rgb + NES_SKY_FLASH * level, 0, 255).astype(np.uint8)
+        snapped = np.array([self.nearest_colour(tuple(colour)) for colour in lightened], np.uint8)
+        return snapped[where.reshape(screen.shape[:2])]
 
     # --- the view: the urn shimmers, and dying turns it red ------------------------------------------
     def picture(self, name, frame_no):
