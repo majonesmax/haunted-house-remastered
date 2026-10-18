@@ -49,7 +49,7 @@ def dining_hall():
 
 
 def conservatory():
-    track = rain(5, drops_a_second=140)
+    track = rain(5, taps_a_second=60)
     rng = np.random.default_rng(6)
     for seed in range(14):
         at(track, rng.uniform(0, 16), panned(drip(seed) * rng.uniform(0.3, 0.6), rng.uniform(-0.8, 0.8)))
@@ -57,7 +57,7 @@ def conservatory():
 
 
 def attic():
-    return 0.6 * rain(7, drops_a_second=60) + wind(8)
+    return 0.6 * rain(7, taps_a_second=15) + wind(8)
 
 
 PLACES = {"outside": outside, "floor1": foyer, "floor2": dining_hall, "floor3": conservatory,
