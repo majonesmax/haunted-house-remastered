@@ -52,6 +52,8 @@ What's next for the remaster, roughly in order. Tick items off as they're done.
 - [x] **Say how to pick things up**: walk into them with a match lit (help, hints, README "How to play")
 - [x] Fix: losing the last life holding the whole urn showed the win's ending
 - [x] Fix: the sound stuttered walking out of the front door (the NES look's fade)
+- [x] v1.1.1: a message when taking something puts the urn down; the urn slots labelled URN; the eyes stop
+      at the end of the hill in the ending
 
 ## 7. Code anyone can read
 
