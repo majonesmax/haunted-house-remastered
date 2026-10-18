@@ -24,6 +24,7 @@ python tools/get_core.py                   # the pinned Stella core (or copy cor
 python play.py                             # play (your ROM is roms/haunted_house.a26)
 python tools/preview.py                    # the look in every situation, as one PNG - look at it
 python tests/golden.py                     # every look still draws the same pixels
+python tests/test_facing.py                # monsters face the way they walk
 python packs/classic/source/draw.py        # regenerate the classic pack's PNGs from its text art
 ruff check --config ruff.toml .            # the readability rules
 ```

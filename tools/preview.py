@@ -1,5 +1,6 @@
 """A look, in every situation worth seeing, as one picture: each scene drawn by the look beside the 2600
-original. Look at it after changing a look or a pack.
+original, then every monster in every facing, as the look draws them. Look at it after changing a look or a
+pack.
 
 Scenes are set up with the lab's RAM pokes (tools/lab.py) - for previews only; play never writes the RAM.
 Monsters are kept away unless a scene wants one.
@@ -176,6 +177,32 @@ def render(look, game, lab, label, scene):
     return tile
 
 
+MONSTERS = ("ghost", "bat", "tarantula2", "tarantula3", "tarantula4")
+FACINGS = ("left", "right", "up", "down")
+STRIP_SCALE = 3
+CELL = 20 * STRIP_SCALE
+
+
+def facing_strip(look, width):
+    """Every monster (a row each) in every facing, both frames, at STRIP_SCALE times size."""
+    height = LABEL_H + len(MONSTERS) * CELL
+    strip = np.zeros((height, width, 3), np.uint8)
+    hud.draw_text(strip, "monsters, facing: left / right / up / down, two frames each", 2, 3, (236, 238, 236))
+    for row, monster in enumerate(MONSTERS):
+        top = LABEL_H + row * CELL
+        hud.draw_text(strip, monster, 2, top + CELL // 2 - 4, (152, 150, 152))
+        for column, (facing, frame) in enumerate((f, n) for f in FACINGS for n in (0, 1)):
+            sprite = look.facing_picture(monster, facing, frame * 8)
+            if sprite is None:
+                continue
+            big = sprite.repeat(STRIP_SCALE, axis=0).repeat(STRIP_SCALE, axis=1)
+            left = 120 + column * CELL
+            area = strip[top:top + big.shape[0], left:left + big.shape[1]]
+            solid = big[:area.shape[0], :area.shape[1], 3:4] > 0
+            area[:] = np.where(solid, big[:area.shape[0], :area.shape[1], :3], area)
+    return strip
+
+
 def sheet(tiles):
     rows = []
     for start in range(0, len(tiles), PER_ROW):
@@ -201,7 +228,9 @@ def main():
         lab.load(start)
     os.makedirs(SHOTS, exist_ok=True)
     path = os.path.join(SHOTS, f"preview_{args.look}_{look.pack.name}.png")
-    Image.fromarray(sheet(tiles)).save(path)
+    scenes = sheet(tiles)
+    picture = np.concatenate([scenes, facing_strip(look, scenes.shape[1])], axis=0)
+    Image.fromarray(picture).save(path)
     print(path)
 
 

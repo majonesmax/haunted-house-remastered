@@ -17,6 +17,7 @@ adapting its pictures to its own rules (adapt()).
 """
 
 from abc import ABC, abstractmethod
+from collections import deque
 
 import numpy as np
 
@@ -36,6 +37,9 @@ FLOOR_PX_H = int(FLOOR_LINES * UNIT)  # 384: the whole floor, top to bottom, as 
 EDGE_STRIP = 4                # units of wall drawn at each side of the middle row (door frames)
 MIDDLE_ROW = 8
 HEIGHTS = {"eyes": 3, "item": 8, "monster": 10, "stairs": 17}  # each kind's height on the floor, in lines
+FACING_MEMORY = 16            # frames of movement a monster's facing is judged over
+JUMP = 8                      # moved further than this between frames: put somewhere new, not walking
+OPPOSITE = {"left": "right", "right": "left", "up": "down", "down": "up"}
 LIGHT_EDGE = 1.25             # past the light's reach, up to this, things show dimly (a soft edge)
 DIM = 0.45                    # brightness of what's seen but not lit
 
@@ -62,6 +66,7 @@ class FloorLook(Look):
         self.pack, self.rom = pack, rom
         self.scenes = {}       # floor -> its pictures, built once (Scene)
         self.adapted = {}      # (name, frame) -> a cast picture through adapt()
+        self.facing = Facing()
 
     def draw(self, state, frame_no):
         screen = np.zeros((SCREEN_H, SCREEN_W, 3), np.uint8)
@@ -82,8 +87,9 @@ class FloorLook(Look):
         top = view_top_row(state)
         rows = slice(top, top + VIEW_H)
         picture = self.light(state, scene, rows)
-        for name, x, y, height in self.who_is_there(state, frame_no):
-            sprite = self.picture(name, frame_no)
+        self.facing.update(state.monsters)
+        for name, facing, x, y, height in self.who_is_there(state, frame_no):
+            sprite = self.facing_picture(name, facing, frame_no)
             if sprite is not None:
                 place(picture, sprite, state, x, y, height)
         return picture
@@ -104,20 +110,34 @@ class FloorLook(Look):
         return np.where(lit[..., None], full, base).astype(np.uint8)
 
     def who_is_there(self, state, frame_no):
-        """(cast name, x, y, height) of everything to draw, back to front: stairs, items, monsters, eyes."""
+        """(cast name, facing, x, y, height) of everything to draw, back to front: stairs, items, monsters,
+        eyes. Only monsters have a facing; the rest have None."""
         found = []
         if V.stairs_visible(state):
             stairs = state.stairs
             name = "stairs_up" if stairs.going_up else "stairs_down"
-            found.append((name, stairs.x, stairs.y, HEIGHTS["stairs"]))
+            found.append((name, None, stairs.x, stairs.y, HEIGHTS["stairs"]))
         for item in state.items:
             if V.item_visible(state, item):
-                found.append((item_name(item), item.x, item.y, HEIGHTS["item"]))
+                found.append((item_name(item), None, item.x, item.y, HEIGHTS["item"]))
         for monster in state.monsters:
             if V.monster_visible(state, monster):
-                found.append((monster_name(monster), monster.x, monster.y, HEIGHTS["monster"]))
-        found.append((f"eyes_{eyes_look(state.looking)}", *state.player, HEIGHTS["eyes"]))
+                facing = self.facing.of(monster)
+                found.append((monster_name(monster), facing, monster.x, monster.y, HEIGHTS["monster"]))
+        found.append((f"eyes_{eyes_look(state.looking)}", None, *state.player, HEIGHTS["eyes"]))
         return found
+
+    def facing_picture(self, name, facing, frame_no):
+        """The cast's picture of `name` facing that way: its own "<name>_<facing>" if the pack draws one;
+        else the opposite side, mirrored (left <-> right); else the plain "<name>"."""
+        if facing is None:
+            return self.picture(name, frame_no)
+        if self.pack.cast.get(f"{name}_{facing}"):
+            return self.picture(f"{name}_{facing}", frame_no)
+        opposite = f"{name}_{OPPOSITE[facing]}"
+        if facing in ("left", "right") and self.pack.cast.get(opposite):
+            return self.picture(opposite, frame_no)[:, ::-1]
+        return self.picture(name, frame_no)
 
     def picture(self, name, frame_no):
         """A cast picture, through the look's adapt(), animating at 8 frames a step."""
@@ -189,6 +209,54 @@ class Scene:
         self.full = full
         self.dim = look.dimmed(full)
         self.flash = look.lightning_colour(full)
+
+
+class Facing:
+    """Which way each monster faces, worked out from how it moves: the game keeps only where a monster is
+    and where it's heading next (and while it chases, that plan isn't where it's going). Judged over the
+    last FACING_MEMORY frames, as monsters step only on some frames."""
+
+    def __init__(self):
+        self.trails = {}   # monster number -> its recent (floor, x, y)
+        self.facings = {}  # monster number -> "left" / "right" / "up" / "down"
+
+    def update(self, monsters):
+        for monster in monsters:
+            here = (monster.floor, monster.x, monster.y)
+            trail = self.trails.setdefault(monster.number, deque(maxlen=FACING_MEMORY))
+            if trail and jumped(trail[-1], here):
+                trail.clear()
+            trail.append(here)
+            previous = self.facings.get(monster.number, monster.heading)
+            self.facings[monster.number] = judge_facing(trail, previous)
+
+    def of(self, monster):
+        """Its facing; until it's been seen moving, the way its plan says it's heading."""
+        return self.facings.get(monster.number, monster.heading)
+
+
+def jumped(before, after):
+    """Did a monster move further than walking could take it (scattered after a death, up the stairs)?"""
+    if before[0] != after[0]:
+        return True
+    return abs(after[1] - before[1]) > JUMP or abs(after[2] - before[2]) > JUMP
+
+
+def judge_facing(trail, previous):
+    """The way a trail of positions goes: along its longer side. Exactly diagonal keeps the previous facing
+    if that's one of the two ways it's going; standing still keeps it too."""
+    _floor, first_x, first_y = trail[0]
+    _floor, last_x, last_y = trail[-1]
+    dx, dy = last_x - first_x, last_y - first_y
+    across = "right" if dx > 0 else "left"
+    up_down = "up" if dy > 0 else "down"   # the game's y counts up the floor
+    if abs(dx) > abs(dy):
+        return across
+    if abs(dy) > abs(dx):
+        return up_down
+    if dx == 0:
+        return previous
+    return previous if previous in (across, up_down) else across
 
 
 # --- placing things ----------------------------------------------------------------------------------

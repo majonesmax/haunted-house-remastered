@@ -9,6 +9,7 @@ Usage: python packs/classic/source/draw.py
 import os
 import sys
 
+import numpy as np
 from PIL import Image
 
 PACK = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -26,7 +27,9 @@ WWWWW
 PUPIL_AT = {"centre": (1, 1), "left": (0, 1), "right": (3, 1), "up": (1, 0), "down": (1, 2)}
 EYE_GAP = 2
 
-GHOST_BODY = """
+# The ghost: seen from the front (walking down the floor), from behind (walking up) and from the side
+# (walking left; walking right is the same, mirrored by the look). Two frames each: the tail waves.
+GHOST_FRONT = """
 .....WWWWWW.....
 ...WWWWWWWWWS...
 ..WWWWWWWWWWWS..
@@ -41,7 +44,7 @@ WWWWWWWWWWWWWWWS
 WWWWWWWWWWWWWWWS
 WWWWWWWWWWWWWWWS
 """
-GHOST_TAILS = ("""
+GHOST_FRONT_TAILS = ("""
 WWW.WWWWW.WWWWWS
 WW...WWW...WWWS.
 .W....W.....WS..
@@ -50,7 +53,33 @@ WWWW.WWWWW.WWWWS
 .WW...WWW...WWS.
 ..W....W.....S..
 """)
+GHOST_SIDE = """
+.....WWWWW......
+...WWWWWWWWS....
+..WWWWWWWWWWS...
+.WWWWWWWWWWWWS..
+.WKKWWWWWWWWWS..
+.WKKWWWWWWWWWWS.
+WWWWWWWWWWWWWWS.
+WWKWWWWWWWWWWWWS
+WKKWWWWWWWWWWWWS
+WWWWWWWWWWWWWWWS
+WWWWWWWWWWWWWWWS
+.WWWWWWWWWWWWWWS
+..WWWWWWWWWWWWWS
+"""
+GHOST_SIDE_TAILS = ("""
+...WWWWW.WWWWWWS
+.....WW...WWW.WS
+...........W..W.
+""", """
+...WWWW.WWWWWWWS
+......W..WWW.WWS
+..........W...W.
+""")
 
+# The bat: wings up and wings down. From the front (flying down) its red eyes show; from behind (flying up)
+# they don't; flying left, they're to the left (right is the same, mirrored by the look).
 BAT_WINGS_UP = """
 K..............K
 KK............KK
@@ -75,35 +104,49 @@ KKK..........KKK
 KK............KK
 K..............K
 """
+BAT_EYES_ROW = {BAT_WINGS_UP: 5, BAT_WINGS_DOWN: 4}
+BAT_EYES = {"down": "...KKKRKKRKKK...", "up": "...KKKKKKKKKK...", "left": "...KRKKRKKKKK..."}
 
-TARANTULA_LEGS_OUT = """
-..L..........L..
+# A tarantula, seen from above, walking up the floor (its head and red eyes at the top). The look turns it
+# for the other directions. Two frames: the legs step.
+TARANTULA_STEP_1 = """
+.....L....L.....
+......L..L......
+..L...BRRB...L..
 ...L..BBBB..L...
 L...LBBBBBBL...L
+.LL..BBBBBB..LL.
+...LLBBBBBBLL...
+.....BBBBBB.....
+...LLBBBBBBLL...
+.LL.BBBBBBBB.LL.
+L..LBBBBBBBBL..L
+...LBBBBBBBBL...
+..L.BBBBBBBB.L..
+.L...BBBBBB...L.
+......BBBB......
+................
+"""
+TARANTULA_STEP_2 = """
+....L......L....
+.....L....L.....
+...L..BRRB..L...
+..L...BBBB...L..
+.L..LBBBBBBL..L.
+L..L.BBBBBB.L..L
+....LBBBBBBL....
+.....BBBBBB.....
+..LLLBBBBBBLLL..
 .L..BBBBBBBB..L.
-..LLBBRBBRBBLL..
-....BBBBBBBB....
+L...BBBBBBBB...L
 ..LLBBBBBBBBLL..
 .L..BBBBBBBB..L.
-L...LBBBBBBL...L
-...L..BBBB..L...
-..L..........L..
+L....BBBBBB....L
+......BBBB......
 ................
 """
-TARANTULA_LEGS_IN = """
-.L............L.
-..L...BBBB...L..
-...LLBBBBBBLL...
-L...BBBBBBBB...L
-.LLLBBRBBRBBLLL.
-....BBBBBBBB....
-.LLLBBBBBBBBLLL.
-L...BBBBBBBB...L
-...LLBBBBBBLL...
-..L...BBBB...L..
-.L............L.
-................
-"""
+TARANTULA_EYES = NES[0x38]  # pale yellow: the head shows on any body colour
+TURNS = {"up": 0, "left": 1, "down": 2, "right": 3}  # quarter turns anticlockwise from facing up
 
 KEY = """
 ................
@@ -283,16 +326,49 @@ def tiled(motif, colours):
     return from_ascii("\n".join(row * TILE_REPEAT for row in rows), colours, strict=True)
 
 
+def ghost_pictures():
+    """Front (down), back (up: the front with no face) and side (left)."""
+    back = GHOST_FRONT.replace("K", "W")
+    views = {"down": (GHOST_FRONT, GHOST_FRONT_TAILS), "up": (back, GHOST_FRONT_TAILS),
+             "left": (GHOST_SIDE, GHOST_SIDE_TAILS)}
+    pictures = {}
+    for facing, (body, tails) in views.items():
+        for frame, tail in enumerate(tails):
+            art = body + tail.strip("\n")
+            pictures[f"ghost_{facing}_{frame}"] = from_ascii(art, CAST_COLOURS, strict=True)
+    return pictures
+
+
+def bat_pictures():
+    """Each wing pose with the eyes for down (front), up (back) and left."""
+    colours = {**CAST_COLOURS, **BAT_COLOURS}
+    pictures = {}
+    for facing, eyes_row in BAT_EYES.items():
+        for frame, art in enumerate((BAT_WINGS_UP, BAT_WINGS_DOWN)):
+            rows = art.strip("\n").split("\n")
+            rows[BAT_EYES_ROW[art]] = eyes_row
+            pictures[f"bat_{facing}_{frame}"] = from_ascii("\n".join(rows), colours, strict=True)
+    return pictures
+
+
+def tarantula_pictures():
+    """Each tarantula's colours, both steps, turned to face each way."""
+    pictures = {}
+    for number, (body, legs) in TARANTULA_COLOURS.items():
+        colours = {**CAST_COLOURS, "B": body, "L": legs, "R": TARANTULA_EYES}
+        for frame, art in enumerate((TARANTULA_STEP_1, TARANTULA_STEP_2)):
+            facing_up = from_ascii(art, colours, strict=True)
+            for facing, turns in TURNS.items():
+                turned = np.ascontiguousarray(np.rot90(facing_up, turns))
+                pictures[f"tarantula{number}_{facing}_{frame}"] = turned
+    return pictures
+
+
 def cast_pictures():
     pictures = {f"eyes_{look}": eyes(look) for look in PUPIL_AT}
-    for frame, tail in enumerate(GHOST_TAILS):
-        pictures[f"ghost_{frame}"] = from_ascii(GHOST_BODY + tail.strip("\n"), CAST_COLOURS, strict=True)
-    for frame, art in enumerate((BAT_WINGS_UP, BAT_WINGS_DOWN)):
-        pictures[f"bat_{frame}"] = from_ascii(art, {**CAST_COLOURS, **BAT_COLOURS}, strict=True)
-    for number, (body, legs) in TARANTULA_COLOURS.items():
-        colours = {**CAST_COLOURS, "B": body, "L": legs}
-        for frame, art in enumerate((TARANTULA_LEGS_OUT, TARANTULA_LEGS_IN)):
-            pictures[f"tarantula{number}_{frame}"] = from_ascii(art, colours, strict=True)
+    pictures.update(ghost_pictures())
+    pictures.update(bat_pictures())
+    pictures.update(tarantula_pictures())
     pictures["key_0"] = from_ascii(KEY, CAST_COLOURS, strict=True)
     pictures["scepter_0"] = from_ascii(SCEPTER, CAST_COLOURS, strict=True)
     for shape in URN_SHAPE_PIECES:
@@ -311,7 +387,11 @@ def world_pictures():
 
 
 def save_all(pictures, folder):
+    """Write the pictures as PNGs, after clearing out the old ones (so a renamed picture leaves no copy)."""
     os.makedirs(folder, exist_ok=True)
+    for old in os.listdir(folder):
+        if old.endswith(".png"):
+            os.remove(os.path.join(folder, old))
     for name, picture in pictures.items():
         Image.fromarray(picture, "RGBA").save(os.path.join(folder, f"{name}.png"))
     return len(pictures)
