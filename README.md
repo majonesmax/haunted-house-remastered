@@ -6,6 +6,37 @@ Atari 2600 **Haunted House** (James Andreasen, 1982) running *unmodified* in an 
 redrawn live from the game's 128 bytes of RAM. It's the sister project of
 [Adventure Forever](https://github.com/majonesmax/adventure-forever), and works the same way.
 
+## Download
+
+**[Get the latest release](https://github.com/majonesmax/haunted-house-remastered/releases/latest)**: one zip
+for Windows (64-bit) and one for macOS (Apple silicon: M1 and later). Unzip it and open the app inside. On an
+Intel Mac or on Linux, [run it from the source](#running-it-from-the-source) instead.
+
+You need your own copy of the game (the ROM isn't included). The first time, the game asks you to drag the ROM
+onto its window, and remembers it after that. **Which ROM:** the NTSC cartridge of Haunted House (Atari
+CX2654), MD5 `f0a6e99f5875891246c3dbecbf2d2cea`. Everything here was worked out and checked on that one.
+
+**On a Mac, the first time:** the app isn't signed with an Apple developer ID, so macOS won't open it at
+first. It says the app can't be checked for malicious software, or that it "is damaged".
+
+1. Double-click **Haunted House.app** and click **Done** (or **OK**) when macOS refuses.
+2. Open **System Settings → Privacy & Security** and scroll down to *"Haunted House" was blocked*.
+3. Click **Open Anyway**, then confirm with your password or Touch ID.
+
+After that it opens normally. Or, in Terminal, in the unzipped folder:
+
+```sh
+xattr -dr com.apple.quarantine "Haunted House.app"
+```
+
+**On Windows, the first time:** the app isn't signed either, so Windows may show *"Windows protected your
+PC"*. Click **More info**, then **Run anyway**.
+
+Each release lists the zips' SHA-256 checksums in `SHA256SUMS.txt`. Recording (R) needs
+[ffmpeg](https://ffmpeg.org/download.html) installed.
+
+## What it is
+
 Two **looks**, and **L** switches between them while you play:
 
 - **NES**: an 8-bit remaster. A Victorian manor in the NES's 64 colours, a matchlight that dithers into the
@@ -24,9 +55,9 @@ and the remasters only *draw* it.
 
 ![The ending, in both looks](docs/media/endings.png)
 
-## Playing it
+## Running it from the source
 
-Needs Python 3.10 or newer, and your own copy of the game (the ROM isn't included).
+Needs Python 3.10 or newer, and your own copy of the game (the ROM isn't included; [which one](#download)).
 
 ```sh
 python -m venv .venv
@@ -35,9 +66,6 @@ pip install -r requirements.txt
 python tools/get_core.py               # downloads the Stella emulator core for your system into cores/
 python play.py                         # drop your ROM onto the window the first time; it's remembered
 ```
-
-**Which ROM:** the NTSC cartridge of Haunted House (Atari CX2654), MD5 `f0a6e99f5875891246c3dbecbf2d2cea`.
-Everything here was worked out and checked on that one.
 
 More: `python play.py --look snes`, `--grid`, `--pack <name>`, `--help`. Recording (R) needs
 [ffmpeg](https://ffmpeg.org). On Linux, sound needs your distribution's PortAudio (e.g. `libportaudio2`).
