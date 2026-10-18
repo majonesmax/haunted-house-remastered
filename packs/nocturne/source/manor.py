@@ -207,20 +207,32 @@ FLOOR_PICTURES = {"marble": marble, "parquet": parquet, "terracotta": terracotta
 
 # --- decorations ------------------------------------------------------------------------------------------
 PORTRAIT = """
-GHHHHHHHHG
-HgggggggGH
-HgbbbbbbGH
-HgbbsssbGH
-HgbsSSssGH
-HgbsKSKsGH
-HgbsSSssGH
-HgbbsssbGH
-HgbccccbGH
-GHHHHHHHHG
+GHHHHHHHHHHHHG
+HgbbbbbbbbbbGH
+HgbbbssssbbbGH
+HgbbsSSSSsbbGH
+HgbsSWWWSWWWsH
+HgbsSWWWSWWWsH
+HgbssSSSSSSssH
+HgbbsSSKKSSsbH
+HgbbbsSSSSsbbH
+HgbccccccccccH
+GHHHHHHHHHHHHG
 """
+EYE_WHITES = ((4, 5), (4, 9))
+PUPILS = {"centre": ((0, 1), (1, 1)), "left": ((0, 0), (1, 0)), "right": ((0, 2), (1, 2)),
+          "up": ((0, 1),), "down": ((1, 1),)}
+CANDELABRA_FLAMES = ("""
+.y...F...y.
+.F...y...F.
+""", """
+.F...y...F.
+.y...F...y.
+""", """
+.y...y...F.
+.F...F...y.
+""")
 CANDELABRA = """
-.y...y...y.
-.F...F...F.
 .W...W...W.
 .W...W...W.
 .B...B...B.
@@ -308,19 +320,27 @@ KKKKKKKK
 """
 SKIN = ramp((120, 70, 50), (250, 200, 160), 3)
 DECOR = [
-    [(PORTRAIT, {"G": GOLD[1], "H": GOLD[3], "g": GOLD[2], "b": (20, 40, 36), "c": (40, 60, 50),
-                 "s": SKIN[1], "S": SKIN[2], "K": (20, 10, 10)}),
-     (CANDELABRA, {"y": (255, 250, 200), "F": (250, 170, 40), "W": (235, 225, 200), "B": GOLD[2]})],
-    [(PORTRAIT, {"G": GOLD[1], "H": GOLD[3], "g": GOLD[2], "b": (60, 14, 20), "c": (90, 30, 30),
-                 "s": SKIN[1], "S": SKIN[2], "K": (20, 10, 10)}),
-     (BOOKSHELF, {"D": WOOD[1], "r": (140, 30, 30), "R": (200, 60, 50), "b": (30, 50, 130),
+    [{"kind": "portrait", "art": PORTRAIT, "eyes": True,
+      "colours": {"G": GOLD[1], "H": GOLD[3], "g": GOLD[2], "b": (20, 40, 36), "c": (40, 60, 50),
+                  "s": SKIN[1], "S": SKIN[2], "K": (20, 10, 10), "W": (240, 236, 220)}},
+     {"kind": "candelabra", "frames": [flame.strip("\n") + "\n" + CANDELABRA.strip("\n")
+                                      for flame in CANDELABRA_FLAMES],
+      "colours": {"y": (255, 250, 200), "F": (250, 170, 40), "W": (235, 225, 200), "B": GOLD[2]}}],
+    [{"kind": "portrait", "art": PORTRAIT, "eyes": True,
+      "colours": {"G": GOLD[1], "H": GOLD[3], "g": GOLD[2], "b": (60, 14, 20), "c": (90, 30, 30),
+                  "s": SKIN[1], "S": SKIN[2], "K": (20, 10, 10), "W": (240, 236, 220)}},
+     {"kind": "bookshelf", "art": BOOKSHELF,
+      "colours": {"D": WOOD[1], "r": (140, 30, 30), "R": (200, 60, 50), "b": (30, 50, 130),
                   "B": (70, 100, 200), "g": (30, 100, 50), "G": (70, 160, 90), "y": (160, 130, 40),
-                  "Y": (220, 190, 80)})],
-    [(FERN, {"L": (90, 190, 80), "l": (40, 120, 50), "T": (150, 70, 40), "t": (200, 110, 60)}),
-     (WINDOW, {"D": WOOD[1], "n": (16, 26, 70), "M": (230, 230, 200), "s": (200, 200, 230),
-               "m": (10, 16, 46)})],
-    [(COBWEB, {"C": (170, 170, 180), "c": (110, 110, 120)}),
-     (CRATE, {"D": WOOD[0], "w": WOOD[2]})],
+                  "Y": (220, 190, 80)}}],
+    [{"kind": "fern", "art": FERN, "colours": {"L": (90, 190, 80), "l": (40, 120, 50), "T": (150, 70, 40),
+                                                "t": (200, 110, 60)}},
+     {"kind": "window", "art": WINDOW,
+      "colours": {"D": WOOD[1], "n": (16, 26, 70), "M": (230, 230, 200), "s": (200, 200, 230),
+                  "m": (10, 16, 46)},
+      "lightning": {"n": (210, 220, 255), "m": (170, 180, 230)}}],
+    [{"kind": "cobweb", "art": COBWEB, "colours": {"C": (170, 170, 180), "c": (110, 110, 120)}},
+     {"kind": "crate", "art": CRATE, "colours": {"D": WOOD[0], "w": WOOD[2]}}],
 ]
 
 # --- the title screen -------------------------------------------------------------------------------------
@@ -404,6 +424,30 @@ def world_pictures():
         pictures[f"wall{number}_top"] = top(floor)
         pictures[f"wall{number}_face"] = face(floor)
         pictures[f"wall{number}_trim"] = solid(1, 1, floor["trim"])
-        for index, (text, colours) in enumerate(DECOR[number - 1]):
-            pictures[f"decor{number}_{index}"] = art(text, colours)
+        for decoration in DECOR[number - 1]:
+            pictures.update(decoration_pictures(number, decoration))
     return pictures
+
+
+def decoration_pictures(number, decoration):
+    """A decoration's pictures, named for looks/scenery.py: frames that flicker, eyes that follow, a
+    lightning version."""
+    name = f"decor{number}_{decoration['kind']}"
+    colours = decoration["colours"]
+    if decoration.get("eyes"):
+        return {f"{name}_{look}": art(with_pupils(decoration["art"], look), colours) for look in PUPILS}
+    if "frames" in decoration:
+        return {f"{name}_{index}": art(text, colours) for index, text in enumerate(decoration["frames"])}
+    pictures = {name: art(decoration["art"], colours)}
+    if "lightning" in decoration:
+        pictures[f"{name}_lightning"] = art(decoration["art"], {**colours, **decoration["lightning"]})
+    return pictures
+
+
+def with_pupils(text, look):
+    """The portrait with its pupils (K) placed in the eye whites, looking one way."""
+    rows = [list(row) for row in text.strip("\n").split("\n")]
+    for eye_row, eye_column in EYE_WHITES:
+        for row, column in PUPILS[look]:
+            rows[eye_row + row][eye_column + column] = "K"
+    return "\n".join("".join(row) for row in rows)

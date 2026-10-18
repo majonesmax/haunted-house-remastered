@@ -42,6 +42,10 @@ class Pictures:
     def own(self, name):
         return name in self.frames
 
+    def names(self):
+        """Every picture name there is: the pack's own and the fallback's."""
+        return sorted(set(self.frames) | set(self.fallback))
+
 
 class Pack:
     """A pack: .cast and .world (Pictures), and .info - its pack.json: "title", "description", and "floors",

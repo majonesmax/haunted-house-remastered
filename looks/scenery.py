@@ -13,9 +13,16 @@ The world's pictures, by name (any can be left out):
     wall<n>_face      the front face, 24 x FACE_H
     wall<n>           a flat wall, for worlds without top and face (used for both)
     wall<n>_trim      the colour of the moulding along a wall's top where it meets floor (its top-left pixel)
-    decor<n>          decorations hung on some faces (several frames = several kinds)
+    decor<n>_<kind>   decorations hung on some faces, one kind per name (decor1_portrait, decor1_sconce...).
+                      Several frames (decor1_sconce_0, _1, _2): it flickers, each on its own beat.
+                      decor<n>_<kind>_left / _right / _up / _down / _centre: its eyes follow the player.
+                      decor<n>_<kind>_lightning: what it looks like in a lightning flash (a window).
+    decor<n>          (older packs) decorations as frames of one picture, each a kind
     front_door        the front door, in the right-hand frame of the middle row of floor 1
 """
+
+from collections import namedtuple
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -26,7 +33,13 @@ from shared.pixelart import blit
 
 SHADOW_H = 4          # px of floor darkened under a wall's face
 DECOR_EVERY = 3       # about one face in three gets a decoration
-DECOR_TOP = 3         # px from the top of the face to a decoration
+DECOR_TOP = 1         # px from the top of the face to a decoration
+EYE_LOOKS = ("centre", "left", "right", "up", "down")
+FLAME_EVERY = 5       # frames a flickering decoration holds each picture
+EYES_NEAR = 30        # px: closer than this, a portrait looks straight out
+
+# a living decoration: its pictures by variant ("frames", a look, "lightning"), where it hangs, its beat
+Decoration = namedtuple("Decoration", "variants left top phase")
 
 
 class Scene:
@@ -47,14 +60,19 @@ class Scene:
         paint_faces(full, faces, face)
         outline(full, self.walls, faces, look.outline_colour(), trim_colour(look, world, number))
         shade_below_faces(full, faces, self.walls, look)
-        decorations = [look.adapt_scenery(picture) for picture in world.get(f"decor{number}") or []]
-        decorate(full, faces, decorations, floor)
+        self.decorations = decorate(full, faces, decoration_kinds(world, number), floor, look)
         if floor == 0 and world.get("front_door"):
             draw_front_door(full, self.walls, look.adapt_scenery(world.get("front_door")[0]))
         self.full = full
         self.dim = look.dimmed(full)
         self.dark = look.dimmed(self.dim)
         self.flash = look.lightning_colour(full)
+
+    def layers(self, rows):
+        """Copies of the pictures for these rows, to draw this frame's living decorations into."""
+        return SimpleNamespace(full=self.full[rows].copy(), dim=self.dim[rows].copy(),
+                               dark=self.dark[rows].copy(), flash=self.flash[rows].copy(),
+                               walls=self.walls[rows])
 
 
 def tile(look, frames, width, height):
@@ -139,17 +157,75 @@ def shade_below_faces(full, faces, walls, look):
         full[band] = np.where(floor_part[..., None], darker, full[band])
 
 
-def decorate(full, faces, decorations, floor):
-    """Hang a decoration on about one face in DECOR_EVERY, chosen by its place so it never changes."""
-    if not decorations:
-        return
+def decoration_kinds(world, number):
+    """[variants, ...]: each kind of decoration for floor `number`, as {variant: picture name}."""
+    kinds = {}
+    for name in world.names():
+        if not name.startswith(f"decor{number}_"):
+            continue
+        base, _, last = name.rpartition("_")
+        if last in EYE_LOOKS or last == "lightning":
+            kinds.setdefault(base, {})[last] = name
+        else:
+            kinds.setdefault(name, {})["frames"] = name
+    found = [kinds[kind] for kind in sorted(kinds)]
+    for index in range(len(world.get(f"decor{number}") or [])):  # an older pack: one picture, many kinds
+        found.append({"frames": f"decor{number}", "frame": index})
+    return found
+
+
+def decorate(full, faces, kinds, floor, look):
+    """Hang a decoration on about one face in DECOR_EVERY, chosen by its place so it never changes. Static
+    ones are painted in; living ones are painted as they first look and returned, to redraw each frame."""
+    living = []
+    if not kinds:
+        return living
+    world = look.pack.world
     for row, column in sorted(faces):
         if (column * 7 + row * 3 + floor) % DECOR_EVERY:
             continue
-        picture = decorations[(column + row + floor) % len(decorations)]
+        variants = kinds[(column + row + floor) % len(kinds)]
+        picture = look.adapt_scenery(first_picture(world, variants))
         face_top = cell_top(row) + CELL_H - FACE_H
         left = cell_left(column) + (CELL_W - picture.shape[1]) // 2
-        blit(full, picture, left, face_top + DECOR_TOP)
+        top = face_top + DECOR_TOP
+        blit(full, picture, left, top)
+        if is_living(world, variants):
+            living.append(Decoration(variants, left, top, phase=column * 3 + row))
+    return living
+
+
+def first_picture(world, variants):
+    if "centre" in variants:
+        return world.get(variants["centre"])[0]
+    return world.get(variants["frames"])[variants.get("frame", 0)]
+
+
+def is_living(world, variants):
+    flickers = "frames" in variants and "frame" not in variants and len(world.get(variants["frames"])) > 1
+    return flickers or "centre" in variants or "lightning" in variants
+
+
+def decoration_now(world, decoration, state, frame_no, player_pixel):
+    """(picture name, frame) a living decoration shows this frame."""
+    variants = decoration.variants
+    if "centre" in variants:
+        return variants[eyes_toward(decoration, player_pixel)], 0
+    if "lightning" in variants and state.lightning:
+        return variants["lightning"], 0
+    frames = world.get(variants["frames"])
+    return variants["frames"], (frame_no // FLAME_EVERY + decoration.phase) % len(frames)
+
+
+def eyes_toward(decoration, player_pixel):
+    """Which way a portrait's eyes look to follow the player (pixels on the floor picture)."""
+    player_x, player_y = player_pixel
+    dx, dy = player_x - (decoration.left + 6), player_y - (decoration.top + 5)
+    if dx * dx + dy * dy < EYES_NEAR * EYES_NEAR:
+        return "centre"
+    if abs(dx) > abs(dy):
+        return "right" if dx > 0 else "left"
+    return "down" if dy > 0 else "up"
 
 
 def draw_front_door(full, walls, door):

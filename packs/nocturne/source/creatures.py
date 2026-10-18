@@ -173,9 +173,26 @@ BAT_WINGS_DOWN = """
 121..........121
 11............11
 """
+BAT_WINGS_LEVEL = """
+................
+................
+................
+......1111......
+..111123321111..
+1122332333322211
+1233323E33E33321
+.12321333312321.
+..11.12FF21.11..
+......1221......
+.......11.......
+................
+"""
+BAT_FLAP = (BAT_WINGS_UP, BAT_WINGS_LEVEL, BAT_WINGS_DOWN, BAT_WINGS_LEVEL)  # up, level, down, level
 BAT_EYES = {
     BAT_WINGS_UP: (6, {"down": "..2333E33E3332..", "up": "..233333333332..",
                        "left": "..23E33E333332.."}),
+    BAT_WINGS_LEVEL: (6, {"down": "1233323E33E33321", "up": "1233323333333321",
+                          "left": "12333E33E3333321"}),
     BAT_WINGS_DOWN: (4, {"down": "....12E33E21....", "up": "....12333321....", "left": "....1E33E321...."}),
 }
 
@@ -306,7 +323,7 @@ def ghost_pictures():
 
 def bat_pictures():
     pictures = {}
-    for frame, wings in enumerate((BAT_WINGS_UP, BAT_WINGS_DOWN)):
+    for frame, wings in enumerate(BAT_FLAP):
         row, by_facing = BAT_EYES[wings]
         for facing, eyes_row in by_facing.items():
             rows = wings.strip("\n").split("\n")

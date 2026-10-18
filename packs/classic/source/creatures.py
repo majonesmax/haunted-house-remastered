@@ -182,8 +182,24 @@ OMMO...OO...OMMO
 OMO..........OMO
 OO............OO
 """
+BAT_WINGS_LEVEL = """
+................
+................
+................
+......OOOO......
+..OOOOBBBBOOOO..
+OOMMMBBBBBBMMMOO
+OMMMMBRBBRBMMMMO
+.OMMOBBBBBBOMMO.
+..OO.OBFFBO.OO..
+......OBBO......
+.......OO.......
+................
+"""
+BAT_FLAP = (BAT_WINGS_UP, BAT_WINGS_LEVEL, BAT_WINGS_DOWN, BAT_WINGS_LEVEL)  # up, level, down, level
 BAT_EYES = {  # (wing pose, its eyes row) -> the row, by facing: down shows the eyes, up hides them
     BAT_WINGS_UP: (6, {"down": "..OMMBRBBRBMMO..", "up": "..OMMBBBBBBMMO..", "left": "..OMMRBBRBBMMO.."}),
+    BAT_WINGS_LEVEL: (6, {"down": "OMMMMBRBBRBMMMMO", "up": "OMMMMBBBBBBMMMMO", "left": "OMMMMRBBRBBMMMMO"}),
     BAT_WINGS_DOWN: (4, {"down": "....OBRBBRBO....", "up": "....OBBBBBBO....", "left": "....ORBBRBBO...."}),
 }
 BAT_COLOURS = {"B": 0x14, "M": 0x04, "R": 0x28, "F": 0x30, "O": OUTLINE}
@@ -333,7 +349,7 @@ def ghost_pictures():
 
 def bat_pictures():
     pictures = {}
-    for frame, art in enumerate((BAT_WINGS_UP, BAT_WINGS_DOWN)):
+    for frame, art in enumerate(BAT_FLAP):
         eyes_row, by_facing = BAT_EYES[art]
         for facing, eyes_art in by_facing.items():
             rows = art.strip("\n").split("\n")

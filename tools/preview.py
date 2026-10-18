@@ -201,14 +201,15 @@ CELL = 20 * STRIP_SCALE
 
 
 def facing_strip(look, width):
-    """Every monster (a row each) in every facing, both frames, at STRIP_SCALE times size."""
+    """Every monster (a row each) in every facing, its first three frames, at STRIP_SCALE times size."""
     height = LABEL_H + len(MONSTERS) * CELL
     strip = np.zeros((height, width, 3), np.uint8)
-    hud.draw_text(strip, "monsters, facing: left / right / up / down, two frames each", 2, 3, (236, 238, 236))
+    label = "monsters, facing: left / right / up / down, three frames each"
+    hud.draw_text(strip, label, 2, 3, (236, 238, 236))
     for row, monster in enumerate(MONSTERS):
         top = LABEL_H + row * CELL
         hud.draw_text(strip, monster, 2, top + CELL // 2 - 4, (152, 150, 152))
-        for column, (facing, frame) in enumerate((f, n) for f in FACINGS for n in (0, 1)):
+        for column, (facing, frame) in enumerate((f, n) for f in FACINGS for n in (0, 1, 2)):
             sprite = look.facing_picture(monster, facing, frame * 8)
             if sprite is None:
                 continue

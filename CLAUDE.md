@@ -32,6 +32,7 @@ python packs/nocturne/source/draw.py       # ...and the nocturne pack's (the SNE
 python music/chiptune.py                   # the classic soundtrack as WAVs in shots/music/, to listen to
 python -m music.orchestra                  # ...and on the SNES look's orchestra
 python -m music.effects                    # the remastered sound effects as WAVs in shots/effects/
+python -m music.ambience                   # the house's ambience, a loop per place, in shots/ambience/
 python tests/test_events.py                # each effect fires on the right event in the running game
 ruff check --config ruff.toml .            # the readability rules
 ```

@@ -230,21 +230,35 @@ MOON_COLOURS = {"L": 0x38, "c": 0x28}
 
 # --- decorations ---------------------------------------------------------------------------------------
 PORTRAIT = """
-GGGGGGGGGG
-GddddddddG
-GddqqqqddG
-GdqffffqdG
-GdqfKfKfdG
-GdqffffqdG
-GddqffqddG
-GdqqqqqqdG
-GqqqqqqqqG
-GGGGGGGGGG
+GGGGGGGGGGGGGG
+GddddddddddddG
+GdddqqqqqqdddG
+GddqffffffqddG
+GdqfWWWfWWWfdG
+GdqfWWWfWWWfdG
+GdqffffffffqdG
+GddqffKKffqddG
+GdddqffffqdddG
+GddccccccccddG
+GGGGGGGGGGGGGG
 """
-SCONCE = """
+EYE_WHITES = ((4, 4), (4, 8))          # (row, column) of each eye's white, top-left: 3 wide, 2 tall
+PUPILS = {"centre": ((0, 1), (1, 1)), "left": ((0, 0), (1, 0)), "right": ((0, 2), (1, 2)),
+          "up": ((0, 1),), "down": ((1, 1),)}   # (row, column) inside an eye's white
+SCONCE_FLAMES = ("""
 ...F....
 ..FyF...
 ...F....
+""", """
+...F....
+...yF...
+..FF....
+""", """
+..F.....
+..Fy....
+...F....
+""")
+SCONCE = """
 ...W....
 ...W....
 ...W....
@@ -338,16 +352,21 @@ FLOORS = [
         "floor": ("motif", MARBLE, {"L": 0x10, "v": 0x00, "d": 0x00, "e": 0x2D}),
         "top": (MASONRY, {"n": 0x02, "m": 0x01}),
         "trim": 0x12,
-        "decor": [(PORTRAIT, {"G": 0x27, "d": 0x07, "q": 0x17, "f": 0x37, "K": 0x0F}),
-                  (SCONCE, {"F": 0x28, "y": 0x30, "W": 0x30, "G": 0x27})],
+        "decor": [{"kind": "portrait", "art": PORTRAIT, "eyes": True,
+                   "colours": {"G": 0x27, "d": 0x07, "q": 0x17, "f": 0x37, "K": 0x0F, "W": 0x30, "c": 0x16}},
+                  {"kind": "sconce", "frames": [flame.strip("\n") + "\n" + SCONCE.strip("\n")
+                                                for flame in SCONCE_FLAMES],
+                   "colours": {"F": 0x28, "y": 0x30, "W": 0x30, "G": 0x27}}],
     },
     {   # 2: the dining hall
         "paper": (STRIPES, {"b": 0x06, "P": 0x16}),
         "floor": ("motif", PARQUET, {"w": 0x17, "D": 0x07}),
         "top": (MASONRY, {"n": 0x06, "m": 0x05}),
         "trim": 0x16,
-        "decor": [(PORTRAIT, {"G": 0x27, "d": 0x0C, "q": 0x1C, "f": 0x37, "K": 0x0F}),
-                  (BOOKSHELF, {"D": 0x07, "r": 0x16, "R": 0x26, "b": 0x11, "B": 0x21, "g": 0x1A, "G": 0x2A})],
+        "decor": [{"kind": "portrait", "art": PORTRAIT, "eyes": True,
+                   "colours": {"G": 0x27, "d": 0x0C, "q": 0x1C, "f": 0x37, "K": 0x0F, "W": 0x30, "c": 0x11}},
+                  {"kind": "bookshelf", "art": BOOKSHELF,
+                   "colours": {"D": 0x07, "r": 0x16, "R": 0x26, "b": 0x11, "B": 0x21, "g": 0x1A, "G": 0x2A}}],
     },
     {   # 3: the conservatory
         "paper": (TRELLIS, {"b": 0x0B, "P": 0x1A}),
@@ -356,8 +375,9 @@ FLOORS = [
         "floor": ("motif", TERRACOTTA, {"T": 0x17, "t": 0x27, "g": 0x07}),
         "top": (MASONRY, {"n": 0x0B, "m": 0x09}),
         "trim": 0x1B,
-        "decor": [(FERN, {"I": 0x2A, "T": 0x17}),
-                  (WINDOW, {"D": 0x07, "n": 0x01, "W": 0x30})],
+        "decor": [{"kind": "fern", "art": FERN, "colours": {"I": 0x2A, "T": 0x17}},
+                  {"kind": "window", "art": WINDOW, "colours": {"D": 0x07, "n": 0x01, "W": 0x30},
+                   "lightning": {"n": 0x31}}],
     },
     {   # 4: the attic
         "paper": (PLANKS, {"w": 0x17, "D": 0x07, "k": 0x08}),
@@ -365,7 +385,8 @@ FLOORS = [
         "floor": ("motif", BOARDS, {"w": 0x17, "D": 0x07, "k": 0x08}),
         "top": (MASONRY, {"n": 0x07, "m": 0x08}),
         "trim": 0x27,
-        "decor": [(COBWEB, {"C": 0x10}), (CRATE, {"D": 0x07, "w": 0x17})],
+        "decor": [{"kind": "cobweb", "art": COBWEB, "colours": {"C": 0x10}},
+                  {"kind": "crate", "art": CRATE, "colours": {"D": 0x07, "w": 0x17}}],
     },
 ]
 
@@ -405,6 +426,33 @@ def world_pictures():
         pictures[f"wall{number}_top"] = top(floor)
         pictures[f"wall{number}_face"] = face(floor)
         pictures[f"wall{number}_trim"] = from_ascii("T", colours({"T": floor["trim"]}), strict=True)
-        for index, (art, numbers) in enumerate(floor["decor"]):
-            pictures[f"decor{number}_{index}"] = from_ascii(art, colours(numbers), strict=True)
+        for decoration in floor["decor"]:
+            pictures.update(decoration_pictures(number, decoration))
     return pictures
+
+
+def decoration_pictures(number, decoration):
+    """A decoration's pictures, named for scenery.py: frames that flicker, eyes that follow, a lightning
+    version."""
+    name = f"decor{number}_{decoration['kind']}"
+    palette = colours(decoration["colours"])
+    if decoration.get("eyes"):
+        return {f"{name}_{look}": from_ascii(with_pupils(decoration["art"], look), palette, strict=True)
+                for look in PUPILS}
+    if "frames" in decoration:
+        return {f"{name}_{index}": from_ascii(art, palette, strict=True)
+                for index, art in enumerate(decoration["frames"])}
+    pictures = {name: from_ascii(decoration["art"], palette, strict=True)}
+    if "lightning" in decoration:
+        flashed = colours({**decoration["colours"], **decoration["lightning"]})
+        pictures[f"{name}_lightning"] = from_ascii(decoration["art"], flashed, strict=True)
+    return pictures
+
+
+def with_pupils(art, look):
+    """The portrait with its pupils (K) placed in the eye whites, looking one way."""
+    rows = [list(row) for row in art.strip("\n").split("\n")]
+    for eye_row, eye_column in EYE_WHITES:
+        for row, column in PUPILS[look]:
+            rows[eye_row + row][eye_column + column] = "K"
+    return "\n".join("".join(row) for row in rows)

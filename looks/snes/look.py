@@ -4,7 +4,8 @@ It keeps the NES look's layout and screens (looks/nes/look.py) and changes the c
 SNES could do:
   colour    15-bit (32 levels a channel); sprites get soft outlines and at most 15 colours (outline.py)
   light     colour math instead of dithering: the match's light is a smooth warm gradient, hottest at the
-            flame; unlit walls in game 1 are moonlit blue; lightning washes everything pale blue-white
+            flame, with dust drifting in it; unlit walls in game 1 are moonlit blue; lightning washes
+            everything pale blue-white
   ghosts    see-through (a translucent sprite layer)
   sound     the orchestra synth (music/orchestra.py): organ, harpsichord, strings, timpani, in a hall
   screens   gradient status panels with bevelled edges; a title screen with a gradient night sky, the moon's
@@ -38,6 +39,10 @@ RAIN = (110, 120, 170)
 RAIN_DROPS = 70
 FLASH_FRAMES = 14                        # the title's lightning fades out over this many frames
 FLASH_EVERY = 330
+DUST_MOTES = 140                         # specks of dust over the whole view; only those in the light show
+DUST = np.array([160, 135, 95])          # how much a speck in full light brightens its pixel
+DUST_DRIFT = 0.15                        # pixels a frame they sink...
+DUST_SWAY = 3                            # ...swaying this many pixels side to side
 
 
 class SnesLook(NesLook):
@@ -69,21 +74,22 @@ class SnesLook(NesLook):
         return GHOST_OPACITY if name.startswith("ghost") else 1.0
 
     # --- the light: colour math ----------------------------------------------------------------------
-    def light(self, state, scene, rows, frame_no):
+    def light(self, state, layers, rows, frame_no):
         """A smooth, warm gradient around the match (hottest at the flame) over the unlit scene: moonlit
         walls in game 1, black in games 2-9, the walls washed pale in a lightning flash."""
-        full, walls = scene.full[rows].astype(float), scene.walls[rows][..., None]
+        full, walls = layers.full.astype(float), layers.walls[..., None]
         reach = light_reach_grid(state, rows) / flicker(frame_no)
         if not state.dark:
             unlit = np.where(walls, full * MOONLIGHT, full * UNLIT_FLOOR)
         elif state.lightning:
-            unlit = np.where(walls, scene.flash[rows].astype(float), full * UNLIT_FLOOR)
+            unlit = np.where(walls, layers.flash.astype(float), full * UNLIT_FLOOR)
         else:
             unlit = np.zeros_like(full)
         glow = np.clip((LIGHT_GONE - reach) / (LIGHT_GONE - LIGHT_FULL), 0, 1)[..., None]
         heat = np.clip(1 - reach / LIGHT_FULL, 0, 1)[..., None]
         lit = full * WARM + FLAME_GLOW * heat
         picture = unlit * (1 - glow) + lit * glow
+        add_dust(picture, glow[..., 0], frame_no)
         return snes_rgb(np.clip(picture, 0, 255).astype(np.uint8))
 
     def view(self, state, frame_no):
@@ -146,6 +152,20 @@ def add_moon_halo(screen, is_sky):
     sky = screen[:is_sky.shape[0]].astype(float)
     glowing = sky + (MOON_HALO - sky) * halo
     screen[:is_sky.shape[0]] = np.where(is_sky[..., None], glowing, sky).astype(np.uint8)
+
+
+def add_dust(picture, glow, frame_no):
+    """Specks of dust sinking and swaying through the view, seen only where the match lights them. The
+    same specks every time round, so pictures repeat."""
+    rng = np.random.default_rng(7)
+    height, width = glow.shape
+    starts_x = rng.uniform(0, width, DUST_MOTES)
+    starts_y = rng.uniform(0, height, DUST_MOTES)
+    phases = rng.uniform(0, 2 * np.pi, DUST_MOTES)
+    xs = (starts_x + DUST_SWAY * np.sin(frame_no / 40 + phases)).astype(int) % width
+    ys = (starts_y + frame_no * DUST_DRIFT).astype(int) % height
+    twinkle = 0.6 + 0.4 * np.sin(frame_no / 9 + phases)
+    picture[ys, xs] += DUST * (glow[ys, xs] * twinkle)[:, None]
 
 
 def add_rain(screen, frame_no):

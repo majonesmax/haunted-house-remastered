@@ -1,5 +1,5 @@
-"""Everything heard: the game's own 2600 sound or the remastered effects - the player's choice (E) - and the
-soundtrack under either.
+"""Everything heard: the game's own 2600 sound or the remastered sound - the player's choice (E) - and the
+soundtrack under either. The remastered sound is the effects and the house's ambience (music/ambience.py).
 
     board = SoundBoard(MusicPlayer(songs))
     board.follow(state)          # once a frame: the music follows the game; events trigger effects
@@ -14,6 +14,7 @@ import threading
 import numpy as np
 
 from music import effects
+from music.ambience import Ambience
 from music.events import EventWatcher
 from music.player import mix
 
@@ -25,6 +26,7 @@ class SoundBoard:
         self.music = music
         self.sounds = effects.render_all()
         self.watcher = EventWatcher()
+        self.ambience = Ambience()
         self.remastered = True
         self.voices = []        # [samples, position] of each effect playing
         self.lock = threading.Lock()
@@ -32,6 +34,7 @@ class SoundBoard:
     def follow(self, state):
         """Once a frame: the music follows the game, and what just happened is heard."""
         self.music.follow(state)
+        self.ambience.follow(state)
         for name in self.watcher.update(state):  # always watched, so switching back finds it up to date
             if self.remastered:
                 self.play(name)
@@ -49,10 +52,10 @@ class SoundBoard:
         return self.remastered
 
     def mixer(self, game_sound):
-        """The sound card's callback: the chosen effects, then the music."""
+        """The sound card's callback: the chosen effects (with the ambience under them), then the music."""
         sound = np.zeros_like(game_sound) if self.remastered else game_sound
         if self.remastered and not self.music.paused:
-            sound = mix(sound, self.next_effects(len(game_sound)))
+            sound = mix(self.ambience.render(len(game_sound)), self.next_effects(len(game_sound)))
         return self.music.mixer(sound)
 
     def next_effects(self, count):

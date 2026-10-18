@@ -22,14 +22,16 @@ from collections import deque
 import numpy as np
 
 from game import visibility as V
-from looks.layout import (SCREEN_H, SCREEN_W, VIEW_H, VIEW_W, VIEW_X, VIEW_Y, floor_point, to_view,
-                          view_top_row)
-from looks.scenery import Scene
+from looks.layout import (FLOOR_LINES, SCREEN_H, SCREEN_W, UNIT_X, UNIT_Y, VIEW_H, VIEW_W, VIEW_X, VIEW_Y,
+                          floor_point, to_view, view_top_row)
+from looks.scenery import Scene, decoration_now
 from shared.pixelart import blit
 
 HEIGHTS = {"eyes": 3, "item": 8, "monster": 10, "stairs": 17}  # each kind's height on the floor, in lines
 FACING_MEMORY = 16            # frames of movement a monster's facing is judged over
 JUMP = 8                      # moved further than this between frames: put somewhere new, not walking
+WALK_MEMORY = 8               # a monster that hasn't moved in this many frames is standing still
+LEGGED = ("tarantula",)       # monsters whose legs move only while they walk (the bat and ghost never stop)
 OPPOSITE = {"left": "right", "right": "left", "up": "down", "down": "up"}
 LIGHT_CORE = 0.8              # inside this much of the light's reach, fully lit
 LIGHT_EDGE = 1.3              # from the reach out to this, a dithered fade
@@ -67,6 +69,7 @@ class FloorLook(Look):
         self.pack, self.rom = pack, rom
         self.scenes = {}       # floor -> its pictures, built once (looks/scenery.py)
         self.adapted = {}      # (name, frame) -> a cast picture through adapt()
+        self.decor_patches = {}  # (name, frame) -> a living decoration's picture in each layer
         self.facing = Facing()
         self.banner_floor, self.banner_frames = None, 0   # the floor whose name is showing, and for how long
         self.intro_game, self.intro_done = None, False
@@ -116,10 +119,12 @@ class FloorLook(Look):
         scene = self.scene(state.floor)
         top = view_top_row(state)
         rows = slice(top, top + VIEW_H)
-        picture = self.light(state, scene, rows, frame_no)
+        layers = scene.layers(rows)
+        self.animate(scene, layers, rows, state, frame_no)
+        picture = self.light(state, layers, rows, frame_no)
         self.facing.update(state.monsters)
-        for name, facing, x, y, height in self.who_is_there(state, frame_no):
-            sprite = self.facing_picture(name, facing, frame_no)
+        for name, facing, x, y, height, clock in self.who_is_there(state, frame_no):
+            sprite = self.facing_picture(name, facing, clock)
             if sprite is not None:
                 centre_x, centre_y = to_view(state, x, y, height)
                 left, top = centre_x - sprite.shape[1] / 2, centre_y - sprite.shape[0] / 2
@@ -130,14 +135,41 @@ class FloorLook(Look):
                     blit(picture, sprite, left, top)
         return picture
 
-    def light(self, state, scene, rows, frame_no):
+    def animate(self, scene, layers, rows, state, frame_no):
+        """Draw this frame's living decorations (flickering candles, portraits' eyes, windows in the
+        lightning) into every layer, so they're lit exactly like the wall they hang on."""
+        player_pixel = ((state.player[0] + 4) * UNIT_X, (FLOOR_LINES - 2 - state.player[1]) * UNIT_Y)
+        for decoration in scene.decorations:
+            if decoration.top + 16 < rows.start or decoration.top > rows.stop:
+                continue
+            name, frame = decoration_now(self.pack.world, decoration, state, frame_no, player_pixel)
+            for layer, patch in self.decoration_patch(name, frame).items():
+                blit(getattr(layers, layer), patch, decoration.left, decoration.top - rows.start)
+
+    def decoration_patch(self, name, frame):
+        """A decoration's picture as it looks lit, dim, dark and in a lightning flash (made once)."""
+        key = (name, frame)
+        if key not in self.decor_patches:
+            picture = self.adapt_scenery(self.pack.world.get(name)[frame])
+            patches = {"full": picture}
+            for layer, change in (("dim", self.dimmed), ("flash", self.lightning_colour)):
+                patch = picture.copy()
+                patch[..., :3] = change(picture[..., :3])
+                patches[layer] = patch
+            dark = picture.copy()
+            dark[..., :3] = self.dimmed(patches["dim"][..., :3])
+            patches["dark"] = dark
+            self.decor_patches[key] = patches
+        return self.decor_patches[key]
+
+    def light(self, state, layers, rows, frame_no):
         """Choose, per pixel, how the floor shows (the original's rules): fully lit near the match, a
         dithered fade at the edge of its reach, and outside it dim (game 1), black (games 2-9) or the walls
         in a lightning flash."""
-        full, dim, flash, walls = scene.full[rows], scene.dim[rows], scene.flash[rows], scene.walls[rows]
+        full, dim, flash, walls = layers.full, layers.dim, layers.flash, layers.walls
         reach = light_reach_grid(state, rows) / flicker(frame_no)
         if not state.dark:  # game 1: the walls are always seen; the floor is dark until lit
-            unlit = np.where(walls[..., None], full, scene.dark[rows])
+            unlit = np.where(walls[..., None], full, layers.dark)
         elif state.lightning:
             unlit = np.where(walls[..., None], flash, 0)
         else:
@@ -151,20 +183,24 @@ class FloorLook(Look):
         return np.where(core[..., None], full, picture).astype(np.uint8)
 
     def who_is_there(self, state, frame_no):
-        """(cast name, facing, x, y, height) of everything to draw, back to front: stairs, items, monsters,
-        eyes. Only monsters have a facing; the rest have None."""
+        """(cast name, facing, x, y, height, clock) of everything to draw, back to front: stairs, items,
+        monsters, eyes. Only monsters have a facing; the rest have None. The clock runs the picture's
+        animation: frame_no, or 0 for a legged monster standing still."""
         found = []
         if V.stairs_visible(state):
             stairs = state.stairs
             name = "stairs_up" if stairs.going_up else "stairs_down"
-            found.append((name, None, stairs.x, stairs.y, HEIGHTS["stairs"]))
+            found.append((name, None, stairs.x, stairs.y, HEIGHTS["stairs"], frame_no))
         for item in state.items:
             if V.item_visible(state, item):
-                found.append((item_name(item), None, item.x, item.y, HEIGHTS["item"]))
+                found.append((item_name(item), None, item.x, item.y, HEIGHTS["item"], frame_no))
         for monster in state.monsters:
             if V.monster_visible(state, monster):
+                name = monster_name(monster)
                 facing = self.facing.of(monster)
-                found.append((monster_name(monster), facing, monster.x, monster.y, HEIGHTS["monster"]))
+                standing = name.startswith(LEGGED) and not self.facing.walking(monster)
+                clock = 0 if standing else frame_no
+                found.append((name, facing, monster.x, monster.y, HEIGHTS["monster"], clock))
         found += self.you(state, frame_no)
         return found
 
@@ -173,15 +209,15 @@ class FloorLook(Look):
         draws them). The eyes are where the game has the player; the hood and hand stay close, so they
         never seem to touch what the eyes don't."""
         x, y = state.player
-        eyes = (self.eyes_name(state, frame_no), None, x, y, HEIGHTS["eyes"])
+        eyes = (self.eyes_name(state, frame_no), None, x, y, HEIGHTS["eyes"], frame_no)
         if not state.match_lit:
             return [eyes]
         if state.looking[0]:
             self.hand_side = 1 if state.looking[0] > 0 else -1
         hand_side = "right" if self.hand_side > 0 else "left"
         hand_x = x + self.hand_side * HAND_OFFSET
-        return [("hood", None, x, y, HEIGHTS["eyes"]), eyes,
-                ("match_hand", hand_side, hand_x, y - HAND_DROP, HEIGHTS["eyes"])]
+        return [("hood", None, x, y, HEIGHTS["eyes"], frame_no), eyes,
+                ("match_hand", hand_side, hand_x, y - HAND_DROP, HEIGHTS["eyes"], frame_no)]
 
     def eyes_name(self, state, frame_no):
         """The eyes look the way the joystick pushes, and now and then blink (if the cast draws a blink)."""
@@ -285,6 +321,11 @@ class Facing:
     def of(self, monster):
         """Its facing; until it's been seen moving, the way its plan says it's heading."""
         return self.facings.get(monster.number, monster.heading)
+
+    def walking(self, monster):
+        """Has it moved in the last WALK_MEMORY frames?"""
+        recent = list(self.trails.get(monster.number, ()))[-WALK_MEMORY:]
+        return len(set(recent)) > 1
 
 
 def jumped(before, after):
