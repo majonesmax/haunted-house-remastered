@@ -7,5 +7,6 @@
     "The Conservatory",
     "The Attic"
   ],
-  "title_window": [29, 14, 6, 4]
+  "title_window": [29, 14, 6, 4],
+  "title_door": [29, 26, 6, 7]
 }

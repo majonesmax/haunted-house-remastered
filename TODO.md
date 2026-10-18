@@ -23,8 +23,8 @@ What's next for the remaster, roughly in order. Tick items off as they're done.
 
 ## 3. A proper ending
 
-- [ ] The win: the mansion at dawn, the urn whole, the eyes walking away, your score in matches
-- [ ] Game over: the window going dark
+- [x] The win: the mansion at dawn, the urn whole, the eyes walking away, your score in matches
+- [x] Game over: the window going dark
 
 ## 4. Finish the SNES layer
 

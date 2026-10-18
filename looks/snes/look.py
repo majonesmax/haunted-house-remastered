@@ -17,7 +17,7 @@ import numpy as np
 
 from looks.base import FloorLook, flicker, light_reach_grid
 from looks.layout import SCREEN_H, SCREEN_W, VIEW_H, VIEW_Y
-from looks.nes.look import MANSION_AT, MOON_AT, NesLook
+from looks.nes.look import MANSION_AT, MOON_AT, SUN_AT, SUN_SCALE, NesLook
 from looks.snes.outline import recolour_outline
 from shared.pixelart import snes_rgb
 
@@ -39,6 +39,11 @@ RAIN = (110, 120, 170)
 RAIN_DROPS = 70
 FLASH_FRAMES = 14                        # the title's lightning fades out over this many frames
 FLASH_EVERY = 330
+DAWN_LIGHT = (255, 214, 160)             # the win: the view warms towards the light outside...
+WARMING = 0.6                            # ...this far, as the game holds the moment
+DAWN = [(0.0, (34, 40, 96)), (0.45, (150, 90, 150)), (0.75, (240, 150, 120)), (1.0, (255, 210, 140))]
+SUN_GLOW = np.array([255, 220, 150])     # the sky round the rising sun
+SUN_GLOW_REACH = 70                      # pixels
 DUST_MOTES = 140                         # specks of dust over the whole view; only those in the light show
 DUST = np.array([160, 135, 95])          # how much a speck in full light brightens its pixel
 DUST_DRIFT = 0.15                        # pixels a frame they sink...
@@ -103,6 +108,26 @@ class SnesLook(NesLook):
             picture = snes_rgb(np.clip(picture * tint, 0, 255).astype(np.uint8))
         return picture
 
+    # --- the endings -----------------------------------------------------------------------------------
+    def draw_dawn_sky(self, screen):
+        """A smooth dawn, deep blue overhead to gold at the hill, glowing round the sun."""
+        rows = np.linspace(0, 1, SCREEN_H)
+        stops, colours = zip(*DAWN)
+        sky = np.stack([np.interp(rows, stops, [colour[channel] for colour in colours])
+                        for channel in range(3)], axis=1)
+        screen[:] = sky[:, None, :].astype(np.uint8)
+        sun_size = 20 * SUN_SCALE
+        centre_x, centre_y = SUN_AT[0] + sun_size / 2, SUN_AT[1] + sun_size / 2
+        rows, columns = np.mgrid[:SCREEN_H, :SCREEN_W]
+        glow = np.clip(1 - np.hypot(columns - centre_x, rows - centre_y) / SUN_GLOW_REACH, 0, 1)[..., None]
+        screen[:] = (screen * (1 - glow * 0.7) + SUN_GLOW * glow * 0.7).astype(np.uint8)
+
+    def lighten(self, screen, amount):
+        """The win at the door (and the ending fading in): the screen warming smoothly towards the light
+        outside, `amount` (0-1) of the way to WARMING."""
+        warmed = screen * (1 - WARMING * amount) + np.array(DAWN_LIGHT) * WARMING * amount
+        screen[:] = snes_rgb(np.clip(warmed, 0, 255).astype(np.uint8))
+
     # --- the status panels ----------------------------------------------------------------------------
     def draw_status(self, screen, state, frame_no):
         panel(screen, 0, VIEW_Y - 4)
@@ -112,8 +137,11 @@ class SnesLook(NesLook):
     # --- the title screen -----------------------------------------------------------------------------
     def draw_title(self, screen, state, frame_no):
         """The NES title's night, with what 16 bits allow: a gradient sky, the moon's halo, rain, and
-        lightning that fades."""
+        lightning that fades. After a win, the NES ending's dawn in smooth colour."""
         super().draw_title(screen, state, frame_no)
+        if state.escaped:
+            screen[:] = snes_rgb(screen)
+            return
         mansion_top = MANSION_AT[1]
         flash = lightning_level(frame_no)
         sky = sky_gradient(mansion_top + 40)

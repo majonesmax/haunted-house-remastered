@@ -25,6 +25,7 @@ DIRECTIONS = ("left", "right", "up", "down")
 LIGHTNING_COLOUR = 1                 # the palette entry the walls flash to
 DYING_EYES = 0xFF92                  # fake joystick readings that roll the eyes while you die
 NO_STAIRS = 0x0F
+WHOLE_URN = 8   # an urn shape: all three pieces joined
 MODES = {0x00: "playing", 0x01: "dying", 0x02: "starting", 0x40: "select", 0x44: "won"}
 
 
@@ -120,6 +121,14 @@ class GameState:
     @property
     def won(self):
         return self.mode == "won"
+
+    @property
+    def escaped(self):
+        """Back at game select after a win: the game leaves the whole urn in your hands until a new game
+        starts (a new game, or game select at launch, starts with nothing held)."""
+        if self.mode != "select" or self.carried is None:
+            return False
+        return self.items[self.carried].shape == WHOLE_URN
 
     @property
     def dark(self):

@@ -80,6 +80,7 @@ class FloorLook(Look):
         self.facing = Facing()
         self.banner_floor, self.banner_frames = None, 0   # the floor whose name is showing, and for how long
         self.hand_side = 1     # which side the match is held: +1 right, -1 left (the way you last went)
+        self.moment, self.moment_start = None, 0   # the title, the win or game over, and when it began
         self.checker = np.add.outer(np.arange(VIEW_H), np.arange(VIEW_W)) % 2 == 0
 
     def draw(self, state, frame_no, extras=NO_EXTRAS):
@@ -92,6 +93,7 @@ class FloorLook(Look):
             self.draw_title(screen, state, frame_no)  # the title has its own lightning
             return screen
         else:
+            self.frames_into("won" if state.won else "playing", frame_no)  # each ending starts afresh
             screen[VIEW_Y:VIEW_Y + VIEW_H, VIEW_X:VIEW_X + VIEW_W] = self.view(state, frame_no)
             self.draw_status(screen, state, frame_no)
             self.follow_floor(screen, state)
@@ -100,6 +102,13 @@ class FloorLook(Look):
         if extras.flash:
             screen = self.distant_flash(screen, extras.flash)
         return screen
+
+    def frames_into(self, moment, frame_no):
+        """How long `moment` ("title", "escaped", "game_over", "won"...) has been showing: the endings play
+        out over time. A new moment starts the count again."""
+        if moment != self.moment:
+            self.moment, self.moment_start = moment, frame_no
+        return frame_no - self.moment_start
 
     def follow_floor(self, screen, state):
         """Arriving on a floor (by the stairs, or starting a game) shows its name for a moment."""

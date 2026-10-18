@@ -1,5 +1,6 @@
 """The house's ambience: what you hear when the music stops, and the storm under everything.
 
+    after a win        dawn: a breeze and birdsong, once the win's tune is over
     where it's quiet   (no song for the moment - the attic in the packs here - the story once its music has
                        played, or the music switched off): rain, wind, a clock in the foyer, drips in the
                        conservatory; floorboards under your feet as you walk; and stand still a while and the
@@ -19,7 +20,8 @@ import wave
 import numpy as np
 
 from music.chiptune import RATE
-from music.house import (NOISES, at, drip, floorboard, panned, rain, seconds, thunder, ticking, wind)
+from music.house import (NOISES, at, birdsong, drip, floorboard, panned, rain, seconds, thunder, ticking,
+                         wind)
 
 BED_LEVEL = 700         # a bed's average loudness: a background, under what happens in it
 BED_PEAK = 4000         # a bed's loudest moments are rounded off towards this
@@ -60,7 +62,16 @@ def attic():
     return 0.6 * rain(7, taps_a_second=15) + wind(8)
 
 
-PLACES = {"outside": outside, "floor1": foyer, "floor2": dining_hall, "floor3": conservatory,
+def dawn():
+    """After the win: the storm has passed - a breeze, and birds waking."""
+    track = 0.25 * wind(9)
+    rng = np.random.default_rng(10)
+    for seed in range(9):
+        at(track, rng.uniform(0, 16), panned(birdsong(seed) * rng.uniform(0.5, 1.0), rng.uniform(-0.8, 0.8)))
+    return track
+
+
+PLACES = {"outside": outside, "dawn": dawn, "floor1": foyer, "floor2": dining_hall, "floor3": conservatory,
           "floor4": attic}
 
 
@@ -80,6 +91,15 @@ def one_off_pcm(sound, level, pan=0.0):
     average = np.sqrt((sounding ** 2).mean() * 2)   # both sides together, as a centred sound
     scaled = stereo / max(1e-9, average) * level
     return (ONE_OFF_PEAK * np.tanh(scaled / ONE_OFF_PEAK)).astype(np.int16)
+
+
+def place_for(state, intro):
+    """Outside in the storm for the story and the title, dawn after a win, else the floor you're on."""
+    if state.escaped:
+        return "dawn"
+    if intro or state.mode == "select":
+        return "outside"
+    return f"floor{state.floor + 1}"
 
 
 # --- playing it -----------------------------------------------------------------------------------------
@@ -112,7 +132,7 @@ class Ambience:
     def follow(self, state, intro, quiet):
         """Once a frame. quiet: no music is playing."""
         self.quiet = quiet
-        place = "outside" if intro or state.mode == "select" else f"floor{state.floor + 1}"
+        place = place_for(state, intro)
         if place != self.place:
             with self.lock:
                 self.place, self.leaving, self.crossfade = place, self.place, seconds(FADE_SECONDS)

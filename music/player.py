@@ -4,7 +4,7 @@ The pack's songs (music/chiptune.py renders them, once) are named by the moment 
     story       the story at launch      title       game select
     floor1-4    walking a floor
     tension     a monster in your room   dying       a life lost (once)
-    game_over   the last life lost (once) win        the urn out of the front door (once)
+    game_over   the last life lost (once) win        the urn out of the front door (once, on into the ending)
 
 The game loop calls follow(state) each frame; the sound card's callback calls mixer(samples)
 (game/emulator.py, AudioOut(mixer=...)), which adds the music to the game's sound. Each looping piece
@@ -29,10 +29,10 @@ def moment(state, intro=False):
     """Which piece belongs to this moment of the game (intro: the story is showing)."""
     if intro:
         return "story"
+    if state.won or state.escaped:
+        return "win"
     if state.mode == "select":
         return "game_over" if state.lives == 0 else "title"
-    if state.won:
-        return "win"
     if state.mode == "dying":
         return "dying"
     if state.monsters_here:

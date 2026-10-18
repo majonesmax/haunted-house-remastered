@@ -172,6 +172,12 @@ def won(lab):
     run(lab, 20)
 
 
+def escaped(lab):
+    """After the win, back at game select: the ending."""
+    won(lab)
+    run(lab, 300)
+
+
 def game_over(lab):
     new_game(lab, 1)
     lab.poke(M.LIVES, 1)
@@ -188,12 +194,22 @@ SCENES = [("intro", intro), ("title", title), ("game 1", game_1_start), ("game 1
           ("floor 4", on_floor(4)), ("game 3, dark", game_3_dark), ("distant lightning", distant_lightning),
           ("game 3, match lit", game_3_lit), ("game 3, stairs", game_3_stairs),
           ("game 3, monster near", game_3_monster_near), ("lightning", lightning), ("caught", dying),
-          ("won", won), ("game over", game_over)]
+          ("won", won), ("escaped", escaped), ("game over", game_over)]
+SETTLE = {"won": 200, "escaped": 170, "game over": 240}   # endings play out: frames the look has seen them
+
+
+def draw_scene(look, game, lab, label, scene):
+    """Set up a scene and draw it. An ending is shown some way in (SETTLE): the look is first shown it
+    that many frames earlier."""
+    extras = scene(lab) or NO_EXTRAS
+    state = game.state(lab.ram)
+    if label in SETTLE:
+        look.draw(state, lab.frame_count - SETTLE[label], extras)
+    return look.draw(state, lab.frame_count, extras)
 
 
 def render(look, game, lab, label, scene):
-    extras = scene(lab) or NO_EXTRAS
-    remaster = look.draw(game.state(lab.ram), lab.frame_count, extras)
+    remaster = draw_scene(look, game, lab, label, scene)
     original = np.array(Image.fromarray(lab.picture()).resize((ORIGINAL_W, HEIGHT), Image.NEAREST))
     tile = np.zeros((HEIGHT + LABEL_H, remaster.shape[1] + 4 + ORIGINAL_W, 3), np.uint8)
     tile[LABEL_H:, :remaster.shape[1]] = remaster

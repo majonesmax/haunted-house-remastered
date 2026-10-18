@@ -3,6 +3,9 @@ floor, the front door). Both come in PACKS: folders in packs/ (and private/packs
 pack.json and the pictures. Whatever a pack leaves out is the original 2600 graphic, read from the ROM
 (content/original.py) - so even an empty pack plays.
 
+pack.json: title, description, floors (the four floors' names), and where the title mansion's tower window
+and front door are in its art (title_window, title_door: x, y, width, height).
+
     names()            the packs there are
     load(name, rom)    a Pack: .cast and .world (each a Pictures, with the original as fallback)
 """

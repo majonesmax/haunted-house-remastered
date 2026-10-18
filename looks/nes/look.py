@@ -49,6 +49,23 @@ BANNER_TOP, BANNER_H = 10, 30                   # a floor's name, near the top o
 TITLE_LIGHTNING_EVERY, TITLE_LIGHTNING_FRAMES = 330, 4
 TITLE_LOOKS = ("centre", "left", "centre", "right", "up", "centre")
 TITLE_LOOK_FRAMES = 40
+# game over: the eyes look out a last time, close, the window's light flickers and goes out; then the words
+EYES_CLOSE, LIGHT_FLICKER, LIGHT_OUT, GAME_OVER_WORDS = 90, 110, 150, 170
+FLICKER_PATTERN = (1, 0, 1, 1, 0, 1, 0, 0, 1, 0)   # the light, 4 frames a step, as it fails
+# the win: the screen lightens at the door; then dawn, the eyes walking off downhill with the urn
+WON_ROWS = 2                                    # this many palette rows lighter, a row at a time
+WON_FRAMES = 240                                # the game holds the win about this long
+FADE_FROM_LIGHT = 40                            # the ending fades in from the light outside
+DAWN_BANDS = [(0, 0x01), (28, 0x02), (56, 0x13), (84, 0x14), (112, 0x24), (140, 0x26), (168, 0x27),
+              (196, 0x37)]                      # (from this row down, this colour): the NES dawn sky
+DAWN_DITHER = 4                                 # rows where two bands mix, alternate rows
+DAWN_STARS = [(40, 9), (139, 8), (231, 15)]     # the last few
+SUN_AT, SUN_SCALE = (158, 136), 2               # behind the right wing, half risen
+SUN_TINT = np.array([1.25, 0.95, 0.45])
+WALK_START, WALK_SPEED = 40, 0.45               # the eyes leave the door this many frames in, this fast
+LOOK_BACK_AT, LOOK_BACK_FRAMES = 172, 60        # ...stopping here for one last look back at the house
+GROUND_Y = 232                                  # on the hill, below the house: where the eyes walk
+ENDING_WORDS, ENDING_VERDICT = 60, 110          # when the words appear
 MATCH_SECONDS = 20
 
 
@@ -63,11 +80,13 @@ class NesLook(FloorLook):
 
     # --- colours -------------------------------------------------------------------------------------
     def to_nes(self, rgb):
-        """An array of colours (..., 3) snapped to the NES palette."""
-        flat = rgb.reshape(-1, 3)
-        colours, where = np.unique(flat, axis=0, return_inverse=True)
-        snapped = np.array([self.nearest_colour(tuple(colour)) for colour in colours], np.uint8)
-        return snapped[where.reshape(-1)].reshape(rgb.shape)
+        """An array of colours (..., 3) snapped to the NES palette: each distinct colour matched once."""
+        red, green, blue = (rgb[..., channel].astype(np.int32) for channel in range(3))
+        colours, where = np.unique((red << 16) | (green << 8) | blue, return_inverse=True)
+        unpacked = np.stack([colours >> 16, (colours >> 8) & 255, colours & 255], axis=1)
+        snapped = np.array([self.nearest_colour(tuple(int(c) for c in colour)) for colour in unpacked],
+                           np.uint8).reshape(-1, 3)
+        return snapped[where.reshape(rgb.shape[:-1])]
 
     def nearest_colour(self, rgb):
         if rgb not in self.nearest:
@@ -99,13 +118,7 @@ class NesLook(FloorLook):
     def distant_flash(self, screen, level):
         """Lightened towards the palette's deep blue, then back into the palette: black steps through the
         blues as it fades (a grey-blue would snap to grey)."""
-        red, green, blue = (screen[..., channel].astype(np.int32) for channel in range(3))
-        packed = (red << 16) | (green << 8) | blue
-        colours, where = np.unique(packed, return_inverse=True)  # the screen's few colours, each done once
-        rgb = np.stack([colours >> 16, (colours >> 8) & 255, colours & 255], axis=1)
-        lightened = np.clip(rgb + NES_SKY_FLASH * level, 0, 255).astype(np.uint8)
-        snapped = np.array([self.nearest_colour(tuple(colour)) for colour in lightened], np.uint8)
-        return snapped[where.reshape(screen.shape[:2])]
+        return self.to_nes(np.clip(screen + NES_SKY_FLASH * level, 0, 255).astype(np.uint8))
 
     # --- the view: the urn shimmers, and dying turns it red ------------------------------------------
     def picture(self, name, frame_no):
@@ -189,21 +202,26 @@ class NesLook(FloorLook):
 
     def draw_title(self, screen, state, frame_no):
         """Game select: the mansion on its hill under the moon, the eyes looking out of the tower window,
-        lightning now and then. Game over: the same night, the window dark."""
+        lightning now and then. Game over: the eyes look out a last time, close, and the window's light
+        flickers and goes out. After a win: the ending (draw_ending)."""
+        if state.escaped:
+            self.draw_ending(screen, state, self.frames_into("escaped", frame_no))
+            return
         game_over = state.lives == 0
+        since = self.frames_into("game_over" if game_over else "title", frame_no)
         flash = frame_no % TITLE_LIGHTNING_EVERY < TITLE_LIGHTNING_FRAMES
         screen[:] = SKY_FLASH if flash else SKY
         for x, y in STARS:
             screen[y, x] = WHITE
         self.draw_world_picture(screen, "title_moon", MOON_AT, MOON_SCALE)
         mansion = self.draw_world_picture(screen, "title_mansion", MANSION_AT, MANSION_SCALE)
-        if mansion is not None and game_over:
+        if mansion is not None and game_over and not window_lit(since):
             self.darken_window(screen)
         elif mansion is not None:
-            self.draw_window_eyes(screen, frame_no)
-        title = "GAME OVER" if game_over else "HAUNTED HOUSE"
-        hud.draw_text(screen, title, centred(title, 2) + 1, LOGO_Y + 2, BLOOD, scale=2, shadow=None)
-        hud.draw_text(screen, title, centred(title, 2), LOGO_Y, WHITE, scale=2)
+            self.draw_window_eyes(screen, frame_no, closed=game_over and since >= EYES_CLOSE)
+        if game_over and since < GAME_OVER_WORDS:
+            return
+        self.draw_logo(screen, "GAME OVER" if game_over else "HAUNTED HOUSE")
         game = f"GAME {state.game}"
         hud.draw_text(screen, game, centred(game), GAME_Y, WHITE)
         if game_over:
@@ -214,6 +232,83 @@ class NesLook(FloorLook):
                 hud.draw_text(screen, rule, RULES_X, RULES_Y + row * RULE_SPACING, GREY)
         hint = "TAB GAME   ENTER PLAY   H HELP"
         hud.draw_text(screen, hint, centred(hint), HINT_Y, GREY)
+
+    def draw_logo(self, screen, title):
+        hud.draw_text(screen, title, centred(title, 2) + 1, LOGO_Y + 2, BLOOD, scale=2, shadow=None)
+        hud.draw_text(screen, title, centred(title, 2), LOGO_Y, WHITE, scale=2)
+
+    # --- the endings ---------------------------------------------------------------------------------
+    def draw_ending(self, screen, state, since):
+        """After a win: dawn behind the mansion, the sun coming up behind it, the tower window dark - and
+        the eyes walking off down the hill with the whole urn. Then how you did. It fades in from the
+        light outside the front door."""
+        self.draw_dawn_sky(screen)
+        self.draw_sun(screen)
+        if self.draw_world_picture(screen, "title_mansion", MANSION_AT, MANSION_SCALE) is not None:
+            self.darken_window(screen)
+            self.draw_eyes_leaving(screen, since)
+        if since >= ENDING_WORDS:
+            self.draw_score(screen, state, since)
+        if since < FADE_FROM_LIGHT:
+            self.lighten(screen, 1 - since / FADE_FROM_LIGHT)   # from where the win at the door left off
+
+    def draw_dawn_sky(self, screen):
+        """Bands of the NES's blues, purples, pinks and oranges, mixing on alternate rows where they meet."""
+        for (top, colour), (bottom, _next) in zip(DAWN_BANDS, DAWN_BANDS[1:] + [(SCREEN_H, None)]):
+            screen[top:bottom] = PAL.NES[colour]
+        for (_top, upper), (top, _lower) in zip(DAWN_BANDS, DAWN_BANDS[1:]):
+            screen[top:top + DAWN_DITHER:2] = PAL.NES[upper]
+        for x, y in DAWN_STARS:
+            screen[y, x] = WHITE
+
+    def draw_sun(self, screen):
+        """The pack's moon, warmed into a rising sun."""
+        frames = self.pack.world.get("title_moon")
+        if not frames:
+            return
+        sun = frames[0].copy()
+        shade = sun[..., :3].astype(float).mean(axis=2, keepdims=True) / 255
+        sun[..., :3] = np.clip(shade * 255 * SUN_TINT, 0, 255).astype(np.uint8)
+        sun = self.adapt(sun).repeat(SUN_SCALE, axis=0).repeat(SUN_SCALE, axis=1)
+        blit(screen, sun, *SUN_AT)
+
+    def draw_eyes_leaving(self, screen, since):
+        """From the front door, the eyes walk off down the hill to the right carrying the urn, stopping
+        once to look back at the house."""
+        door = self.pack.info.get("title_door")
+        if not door:
+            return
+        start_x = MANSION_AT[0] + (door[0] + door[2] / 2) * MANSION_SCALE
+        walked, looking_back = walk(since, start_x)
+        eyes = self.picture("eyes_left" if looking_back else "eyes_right", since)
+        urn = self.picture("urn8", since)
+        if eyes is None:
+            return
+        x = int(start_x + walked)
+        bob = 0 if looking_back else (since // 8) % 2
+        blit(screen, eyes, x - eyes.shape[1] // 2, GROUND_Y - eyes.shape[0] - bob)
+        if urn is not None:
+            blit(screen, urn, x + eyes.shape[1] // 2 + 2, GROUND_Y - urn.shape[0] + 2 - bob)
+
+    def draw_score(self, screen, state, since):
+        self.draw_logo(screen, "YOU ESCAPED!")
+        with_urn = f"WITH THE URN - GAME {state.game}"
+        hud.draw_text(screen, with_urn, centred(with_urn), GAME_Y, WHITE)
+        used = f"{state.matches_used} MATCH USED" if state.matches_used == 1 else \
+            f"{state.matches_used} MATCHES USED"
+        hud.draw_text(screen, used, centred(used), GAME_Y + 12, WHITE)
+        if since >= ENDING_VERDICT:
+            verdict = guide.verdict(state.matches_used)
+            hud.draw_text(screen, verdict, centred(verdict), GAME_Y + 26, GREY)
+            hint = "TAB GAME   ENTER PLAY   H HELP"
+            hud.draw_text(screen, hint, centred(hint), GAME_Y + 44, WHITE)   # clear of the eyes' path
+
+    def lighten(self, screen, amount):
+        """The win at the door: the screen lightening `amount` (0-1) of the way - on the NES, the way its
+        games fade to white, a palette row at a time."""
+        rows = int(amount * (WON_ROWS + 1))
+        if rows:
+            screen[:] = self.shift_rows(screen, min(rows, WON_ROWS))
 
     def draw_intro(self, screen, frame_no):
         """The story, a line at a time, over the dark; the eyes watching from below."""
@@ -253,14 +348,14 @@ class NesLook(FloorLook):
             top, left = MANSION_AT[1] + y, MANSION_AT[0] + x
             screen[top:top + height, left:left + width] = BLACK
 
-    def draw_window_eyes(self, screen, frame_no):
-        """The eyes in the lit tower window: looking around, and blinking."""
+    def draw_window_eyes(self, screen, frame_no, closed=False):
+        """The eyes in the lit tower window: looking around, and blinking (or closed)."""
         window = self.pack.info.get("title_window")
         if not window:
             return
         x, y, width, height = (value * MANSION_SCALE for value in window)
         look = TITLE_LOOKS[frame_no // TITLE_LOOK_FRAMES % len(TITLE_LOOKS)]
-        blinking = frame_no % 180 < 8
+        blinking = closed or frame_no % 180 < 8
         eyes = self.picture("eyes_blink" if blinking else f"eyes_{look}", frame_no)
         if eyes is not None:
             screen_x = MANSION_AT[0] + x + (width - eyes.shape[1]) // 2
@@ -270,10 +365,11 @@ class NesLook(FloorLook):
             blit(screen, eyes, screen_x, screen_y)
 
     def draw_win(self, screen, state, frame_no):
+        """Out of the front door with the urn: the light outside grows as the game holds the moment."""
+        since = self.frames_into("won", frame_no)
+        self.lighten(screen, min(1.0, since / WON_FRAMES))
         banner = "YOU ESCAPED!"
         hud.draw_text(screen, banner, centred(banner, 2), VIEW_Y + 20, flash_colour(frame_no), scale=2)
-        matches = f"WITH {state.matches_used} MATCHES"
-        hud.draw_text(screen, matches, centred(matches), VIEW_Y + 44, WHITE)
 
 
 def shifted(index, rows):
@@ -301,6 +397,26 @@ def shimmer(sprite, frame_no):
         match = solid & (sprite[..., :3] == colours[index]).all(axis=2)
         shimmered[match, :3] = flash if rank == 0 else flash // 2
     return shimmered
+
+
+def window_lit(since):
+    """Game over: is the tower window still lit, `since` frames in? Lit, then flickering, then out."""
+    if since < LIGHT_FLICKER:
+        return True
+    if since >= LIGHT_OUT:
+        return False
+    return bool(FLICKER_PATTERN[(since - LIGHT_FLICKER) // 4 % len(FLICKER_PATTERN)])
+
+
+def walk(since, start_x):
+    """The eyes leaving from start_x: (pixels walked, looking back?) `since` frames into the ending."""
+    walking = max(0, since - WALK_START)
+    stop_at = (LOOK_BACK_AT - start_x) / WALK_SPEED   # frames of walking to the look-back spot
+    if walking < stop_at:
+        return walking * WALK_SPEED, False
+    if walking < stop_at + LOOK_BACK_FRAMES:
+        return stop_at * WALK_SPEED, True
+    return (walking - LOOK_BACK_FRAMES) * WALK_SPEED, False
 
 
 def flash_colour(frame_no):

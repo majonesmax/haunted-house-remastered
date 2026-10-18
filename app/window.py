@@ -118,8 +118,9 @@ class GameWindow:
 
     def weather(self, state):
         """(the distant lightning's flash, 0-1; does its thunder arrive now?) - over the story and in play,
-        not on the title (it has its own), and only while the lightning switch is on (D)."""
-        if not self.lightning or (state.mode == "select" and not self.intro):
+        not on the title (it has its own) or after a win (the storm has passed), and only while the
+        lightning switch is on (D)."""
+        if not self.lightning or state.won or (state.mode == "select" and not self.intro):
             return 0.0, False
         return self.storm.flash(self.frame_no), self.storm.thunder(self.frame_no)
 

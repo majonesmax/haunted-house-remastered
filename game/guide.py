@@ -39,6 +39,18 @@ HOW_TO_PLAY = [
 ]
 
 
+VERDICTS = [(5, "YOU HARDLY NEEDED A LIGHT"), (15, "A STEADY HAND"), (30, "THE HOUSE TESTED YOU"),
+            (None, "BUT YOU GOT OUT")]   # by matches used, fewest first: fewer is better
+
+
+def verdict(matches):
+    """A line on how you did: the fewer matches, the better."""
+    for most, line in VERDICTS:
+        if most is None or matches <= most:
+            return line
+    return ""
+
+
 def game_rules(game):
     """Short lines saying what game `game` (1-9) is like."""
     rules = ["THE WALLS SHOW" if game == 1 else "THE HOUSE IS DARK"]

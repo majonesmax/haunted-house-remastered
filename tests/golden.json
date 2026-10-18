@@ -1,6 +1,7 @@
 {
  "nes/caught": "2eddea4ec0ed998ca6ff6e492663f271e639f7ab9c969081bdf1a842734d8e7e",
  "nes/distant lightning": "063128302673eba49bcf0cc4e3cb2dd5ca168ce7b9ade611d728ef9f9fb62441",
+ "nes/escaped": "653cc28a91bd1996d786d6c8c1face7b5f3dede22cee644902ea1732ceabe64d",
  "nes/floor 2": "57aba0dff7ea098793f5f63974feeb2672e87124ef31adf43d3e77c8f9481dbe",
  "nes/floor 3": "fe44d109cdf80abd0b7bb3234be60c71cc937785838061dada914230557344bd",
  "nes/floor 4": "eb34d37c9fdee845d57f771011dc37bb2b83a0bbd7df4b47230ea59a3a953b52",
@@ -15,9 +16,10 @@
  "nes/intro": "c7a9fd767eaaf2b5a6d4f7c50ae130d993a2331d37a4bf380d50d16f2db57632",
  "nes/lightning": "6881e73cb7ec87a35ea47f3daf07fe6cc5718ca5435e13dec1fb6df763d4c87f",
  "nes/title": "8cffd7a33e9b31f58c58a8a412fa58e0ea3a63486a5a409ffc2f6f1d41d19c97",
- "nes/won": "3563b3e1c4b0772536f0a2002a03f9fa1b173d332c21339ab65271fcf545b629",
+ "nes/won": "34311966f47180177dc770c69e6409457fd0896522da5b92c25ffc1d19e788f2",
  "snes/caught": "b4dbcaeaf610c081d94e53a853b6bdc3176afdcec378def10d01c36dc340f054",
  "snes/distant lightning": "b3ef01b38aedc0e583e781b07a67acfb5fb6aafc5d20df3af5efa4ddd7297eec",
+ "snes/escaped": "38351896a696fb76f335594cae42220a6b202ee0d919770fa09a7ee788d1f014",
  "snes/floor 2": "8396dda71d6e1e2e5749c00d49c23edb405df49c6d54deaa2e07fcce91ffc1ed",
  "snes/floor 3": "7c7422f5e9e9acf9488a853ec099b698ee63bf9a7ec6dd0d7b8bddd4bafc29ce",
  "snes/floor 4": "dbd7f4f23fd4b46667a339d98269c7555ea28accef122c100c0e642070d8bb61",
@@ -32,5 +34,5 @@
  "snes/intro": "eb6c4a0af1a14dbcf1be6d4595dea65cd2504681fcaa189be84d0e0d1c9af35e",
  "snes/lightning": "b0edc3b6fed1ab20d4b777f2cb122ec4da6c039c32dcf98028033b5f6b19c259",
  "snes/title": "a8f5b6027d405e1497d7585413479304d7f6e48707f46c49c887227e17a3f597",
- "snes/won": "e5339afa20af561df5f73f6c452f200c78534ab3b557be175748a40459bbc712"
+ "snes/won": "81cdc45e1c9fba8743a6cb168e2d166ea77cfb6569c7a25a6adb3fc026e88062"
 }

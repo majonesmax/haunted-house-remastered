@@ -137,6 +137,23 @@ def thunder(seed):
     return rumble * (rolls * fade_in_out(length, 0.2, 1.5))[:, None]
 
 
+def birdsong(seed):
+    """A small bird: a phrase of quick chirps, each a whistle that swoops and trills."""
+    rng = np.random.default_rng(seed)
+    phrase = np.zeros(seconds(1.6))
+    start = 0.0
+    for _chirp in range(rng.integers(3, 7)):
+        length = seconds(rng.uniform(0.05, 0.13))
+        t = np.arange(length) / RATE
+        swoop = np.linspace(rng.uniform(2500, 4200), rng.uniform(2800, 5000), length)
+        trill = 1 + 0.06 * np.sin(2 * np.pi * rng.uniform(25, 45) * t)
+        chirp = np.sin(2 * np.pi * np.cumsum(swoop * trill) / RATE) * np.sin(np.pi * t / t[-1]) ** 2
+        begin = seconds(start)
+        phrase[begin:begin + length] += chirp[:len(phrase) - begin]
+        start += rng.uniform(0.09, 0.22)
+    return phrase
+
+
 def drip(seed):
     """A drop into a puddle: a short plink that bends up."""
     rng = np.random.default_rng(seed)
