@@ -68,6 +68,8 @@ SUN_TINT = np.array([1.25, 0.95, 0.45])
 WALK_START, WALK_SPEED = 40, 0.45               # the eyes leave the door this many frames in, this fast
 LOOK_BACK_AT, LOOK_BACK_FRAMES = 172, 60        # ...stopping here for one last look back at the house
 GROUND_Y = 232                                  # on the hill, below the house: where the eyes walk
+REST_MARGIN = 27                                # where they stop: this far in from the hill's end, so the
+                                                # eyes and the urn beside them stay on the grass
 ENDING_WORDS, ENDING_VERDICT = 60, 110          # when the words appear
 MATCH_SECONDS = 20
 
@@ -258,9 +260,10 @@ class NesLook(FloorLook):
         light outside the front door."""
         self.draw_dawn_sky(screen)
         self.draw_sun(screen)
-        if self.draw_world_picture(screen, "title_mansion", MANSION_AT, MANSION_SCALE) is not None:
+        mansion = self.draw_world_picture(screen, "title_mansion", MANSION_AT, MANSION_SCALE)
+        if mansion is not None:
             self.darken_window(screen)
-            self.draw_eyes_leaving(screen, since)
+            self.draw_eyes_leaving(screen, since, hill_end=MANSION_AT[0] + mansion.shape[1])
         if since >= ENDING_WORDS:
             self.draw_score(screen, state, since)
         if since < FADE_FROM_LIGHT:
@@ -286,20 +289,22 @@ class NesLook(FloorLook):
         sun = self.adapt(sun).repeat(SUN_SCALE, axis=0).repeat(SUN_SCALE, axis=1)
         blit(screen, sun, *SUN_AT)
 
-    def draw_eyes_leaving(self, screen: Picture, since: int) -> None:
-        """From the front door, the eyes walk off down the hill to the right carrying the urn, stopping
-        once to look back at the house."""
+    def draw_eyes_leaving(self, screen: Picture, since: int, hill_end: int) -> None:
+        """From the front door, the eyes walk down the hill to the right carrying the urn, stopping once to
+        look back at the house, then on to the end of the hill (`hill_end`, the screen x where the grass
+        stops), where they stand with the urn, facing the morning."""
         door = self.pack.info.get("title_door")
         if not door:
             return
         start_x = MANSION_AT[0] + (door[0] + door[2] / 2) * MANSION_SCALE
-        walked, looking_back = walk(since, start_x)
+        walked, looking_back = walk(since, start_x, rest_x=hill_end - REST_MARGIN)
         eyes = self.picture("eyes_left" if looking_back else "eyes_right", since)
         urn = self.picture("urn8", since)
         if eyes is None:
             return
         x = int(start_x + walked)
-        bob = 0 if looking_back else (since // 8) % 2
+        resting = x >= hill_end - REST_MARGIN
+        bob = 0 if looking_back or resting else (since // 8) % 2
         blit(screen, eyes, x - eyes.shape[1] // 2, GROUND_Y - eyes.shape[0] - bob)
         if urn is not None:
             blit(screen, urn, x + eyes.shape[1] // 2 + 2, GROUND_Y - urn.shape[0] + 2 - bob)
@@ -423,15 +428,16 @@ def window_lit(since: int) -> bool:
     return bool(FLICKER_PATTERN[(since - LIGHT_FLICKER) // 4 % len(FLICKER_PATTERN)])
 
 
-def walk(since: int, start_x: float) -> tuple[float, bool]:
-    """The eyes leaving from start_x: (pixels walked, looking back?) `since` frames into the ending."""
+def walk(since: int, start_x: float, rest_x: float) -> tuple[float, bool]:
+    """The eyes leaving from start_x: (pixels walked, looking back?) `since` frames into the ending - never
+    past rest_x, where they stand."""
     walking = max(0, since - WALK_START)
     stop_at = (LOOK_BACK_AT - start_x) / WALK_SPEED   # frames of walking to the look-back spot
     if walking < stop_at:
         return walking * WALK_SPEED, False
     if walking < stop_at + LOOK_BACK_FRAMES:
         return stop_at * WALK_SPEED, True
-    return (walking - LOOK_BACK_FRAMES) * WALK_SPEED, False
+    return min((walking - LOOK_BACK_FRAMES) * WALK_SPEED, rest_x - start_x), False
 
 
 def flash_colour(frame_no: int) -> Rgb:
