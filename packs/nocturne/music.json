@@ -1,0 +1,50 @@
+{
+  "_about": "The classic pack's soundtrack: original gothic chiptune, rendered by music/chiptune.py. A song per moment: title, floor1-4, tension (a monster in your room), dying, game_over, win. Melody tokens are eighth notes (8 a bar); see music/chiptune.py.",
+  "songs": {
+    "title": {
+      "bpm": 76, "style": "organ", "loop": true, "drums": "",
+      "chords": "Dm Bb Gm A Dm F Gm A",
+      "melody": "D5 - - - A4 - D5 - | F5 - E5 - D5 - C5 - | D5 - Bb4 - G4 - Bb4 - | A4 - - - C#5 - E5 - | F5 - - - E5 - D5 - | C5 - - - A4 - C5 - | Bb4 - A4 - G4 - Bb4 - | A4 - - - - - . ."
+    },
+    "floor1": {
+      "bpm": 132, "style": "drive", "loop": true, "drums": "k.h.s.h.k.k.s.h.",
+      "chords": "Dm Dm Bb C Dm Dm Gm A F C Dm Bb Gm A Dm A",
+      "melody": "D5 - F5 - A5 - G5 F5 | E5 - D5 - C#5 - D5 - | F5 - - - D5 - Bb4 - | C5 - E5 - G5 - - - | A5 - G5 F5 E5 - F5 - | D5 - - - A4 - D5 - | Bb5 - A5 - G5 - F5 E5 | E5 - - - C#5 - A4 - | C5 - F5 - A5 - C6 - | G5 - - - E5 - C5 - | D5 - F5 - A5 - D6 - | C6 - Bb5 - A5 - F5 - | G5 - Bb5 - D6 - C6 Bb5 | A5 - - - C#6 - E6 - | D6 - A5 - F5 - D5 - | E5 - C#5 - A4 - . ."
+    },
+    "floor2": {
+      "bpm": 120, "style": "march", "loop": true, "drums": "k...s...k...s...",
+      "chords": "Am E Am E F C Dm E Am G F E Dm Am E Am",
+      "melody": "A4 - C5 - E5 - A5 - | G#5 - - - B4 - E5 - | A5 - G5 - F5 - E5 - | E5 - D5 - C5 - B4 - | C5 - A4 - F5 - - - | E5 - - - G5 - C5 - | F5 - E5 - D5 - F5 - | E5 - - - G#4 - - - | E5 - A5 - C6 - B5 A5 | B5 - - - G5 - D5 - | A5 - - - F5 - C5 - | G#5 - - - E5 - B4 - | D5 - F5 - A5 - D6 - | C6 - - - A5 - E5 - | G#5 - B5 - E6 - D6 - | C6 - - - A5 - . ."
+    },
+    "floor3": {
+      "bpm": 108, "style": "creep", "loop": true, "drums": "k.......k...h...",
+      "chords": "Em C Am B Em C D B G D Em B C Am B Em",
+      "melody": "B4 - - - E5 - G5 - | E5 - - - . . C5 - | A4 - C5 - E5 - D5 C5 | B4 - - - D#5 - F#5 - | G5 - - - F#5 - E5 - | E5 - G5 - C6 - - - | A5 - - - F#5 - D5 - | D#5 - - - B4 - . . | D5 - G5 - B5 - - - | A5 - F#5 - D5 - - - | E5 - G5 - B5 - E6 - | D#6 - - - B5 - F#5 - | E5 - - - G5 - E5 - | C5 - E5 - A5 - - - | F#5 - - - D#5 - B4 - | E5 - - - . . . ."
+    },
+    "floor4": {
+      "bpm": 88, "style": "creep", "loop": true, "drums": "k.......k.......",
+      "chords": "Cm Cm Ab G Cm Fm G G Ab Fm Cm G Fm Ab G Cm",
+      "melody": ". . G4 - - - Eb5 - | D5 - - - C5 - . . | . . Ab4 - - - C5 - | B4 - - - D5 - F5 - | Eb5 - - - D5 - C5 - | Ab4 - - - F4 - C5 - | B4 - - - G4 - - - | . . D5 - F5 - Ab5 - | G5 - - - Eb5 - C5 - | F5 - - - Ab5 - F5 - | Eb5 - - - C5 - G4 - | B4 - - - D5 - . . | C5 - Ab4 - F4 - Ab4 - | Eb5 - - - C5 - Ab4 - | D5 - - - B4 - G4 - | C5 - - - . . . ."
+    },
+    "tension": {
+      "bpm": 150, "style": "tremolo", "loop": true, "drums": "k..k....k..k....",
+      "chords": "Em F Em F Em F D#dim Em",
+      "melody": "E5 - . . . . . . | F5 - . . . . . . | E5 - . . G5 - . . | F5 - . . A5 - . . | B5 - - - Bb5 - - - | A5 - - - Ab5 - - - | G5 - F#5 - F5 - E5 - | E5 - - - . . . ."
+    },
+    "dying": {
+      "bpm": 120, "style": "creep", "loop": false, "drums": "",
+      "chords": "Dm A",
+      "melody": "A5 G#5 G5 F#5 F5 E5 Eb5 D5 | C#5 - - - D5 - - -"
+    },
+    "game_over": {
+      "bpm": 70, "style": "organ", "loop": false, "drums": "",
+      "chords": "Dm Gm A Dm",
+      "melody": "D5 - - - C5 - Bb4 - | Bb4 - - - A4 - G4 - | A4 - - - C#5 - E5 - | D5 - - - - - - -"
+    },
+    "win": {
+      "bpm": 132, "style": "fanfare", "loop": false, "drums": "k...s...k.s.k...",
+      "chords": "D G A D",
+      "melody": "A4 D5 F#5 A5 - - F#5 A5 | B5 - G5 - D6 - B5 - | A5 - C#6 - E6 - C#6 - | D6 - - - - - - -"
+    }
+  }
+}

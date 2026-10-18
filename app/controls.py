@@ -8,6 +8,7 @@ CONTROLS = [
     ("SPACE", "MATCH / DROP"),
     ("TAB", "GAME SELECT"),
     ("ENTER", "GAME RESET"),
+    ("L", "NES / SNES LOOK"),
     ("D", "LIGHTNING ON/OFF"),
     ("M", "MUSIC ON/OFF"),
     ("E", "SOUND: NEW / 2600"),

@@ -2,7 +2,9 @@
 
 Atari 2600 *Haunted House* (James Andreasen, 1982) running *unmodified* in the Stella emulator, with every
 frame redrawn live from the game's 128 bytes of RAM, in the spirit of [Adventure Forever](../adventure-nes).
-The first look is **NES**: an 8-bit remaster, with the 2600 original alongside.
+Two looks, with the 2600 original alongside: **NES**, an 8-bit remaster, and **SNES**, a 16-bit one - smooth
+warm matchlight, moonlit walls, a see-through ghost, art in 16-bit colour ramps, and the soundtrack on a
+small gothic orchestra. L switches between them while you play.
 
 The research came first: what every byte of RAM means, what's in the ROM, and how the game works, each claim
 checked against the running game. That's below, under *What we know*.
@@ -21,6 +23,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 |---|---|
 | Arrows, Space | the joystick: move; light a match (with one lit, drop what you carry) |
 | Tab / Enter | GAME SELECT / GAME RESET |
+| L | the next look: NES or SNES (each with its own pack, and its own sound chip for the music) |
 | D | the left difficulty switch: lightning on (B, the default) or off (A) |
 | M | the soundtrack on or off |
 | E | the sound effects: remastered (the default) or the original 2600 sound |

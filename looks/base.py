@@ -51,6 +51,7 @@ class Look(ABC):
 
     platform = "?"
     name = "?"
+    synth = "chiptune"   # the console's sound chip: plays any pack's songs (music/)
 
     @abstractmethod
     def draw(self, state, frame_no):
@@ -92,7 +93,12 @@ class FloorLook(Look):
             sprite = self.facing_picture(name, facing, frame_no)
             if sprite is not None:
                 centre_x, centre_y = to_view(state, x, y, height)
-                blit(picture, sprite, centre_x - sprite.shape[1] / 2, centre_y - sprite.shape[0] / 2)
+                left, top = centre_x - sprite.shape[1] / 2, centre_y - sprite.shape[0] / 2
+                opacity = self.opacity(name)
+                if opacity < 1:
+                    blend(picture, sprite, left, top, opacity)
+                else:
+                    blit(picture, sprite, left, top)
         return picture
 
     def light(self, state, scene, rows, frame_no):
@@ -189,8 +195,16 @@ class FloorLook(Look):
         return (0, 0, 0)
 
     def adapt(self, picture):
-        """A cast or world picture through the console's colour rules. Default: unchanged."""
+        """A cast picture through the console's colour rules. Default: unchanged."""
         return picture
+
+    def adapt_scenery(self, picture):
+        """A world picture (tiles, decorations) through the console's rules. Default: as the cast."""
+        return self.adapt(picture)
+
+    def opacity(self, name):
+        """How solid a cast picture is drawn: 1 solid; less, see-through (a console with colour math)."""
+        return 1.0
 
     def dimmed(self, rgb):
         """What's seen but not lit, given the lit colours (an array). Default: darker."""
@@ -260,6 +274,21 @@ def judge_facing(trail, previous):
     if dx == 0:
         return previous
     return previous if previous in (across, up_down) else across
+
+
+def blend(picture, sprite, left, top, opacity):
+    """Paste a sprite part see-through: its solid pixels mixed with what's under them."""
+    left, top = int(round(left)), int(round(top))
+    height, width = sprite.shape[:2]
+    x0, y0 = max(left, 0), max(top, 0)
+    x1, y1 = min(left + width, picture.shape[1]), min(top + height, picture.shape[0])
+    if x0 >= x1 or y0 >= y1:
+        return
+    part = sprite[y0 - top:y1 - top, x0 - left:x1 - left]
+    solid = part[..., 3:4] > 0
+    under = picture[y0:y1, x0:x1].astype(float)
+    mixed = under * (1 - opacity) + part[..., :3] * opacity
+    picture[y0:y1, x0:x1] = np.where(solid, mixed, under).astype(np.uint8)
 
 
 def flicker(frame_no):

@@ -30,7 +30,8 @@ from shared import hud
 JOYSTICK = {pygame.K_UP: E.JOY_UP, pygame.K_DOWN: E.JOY_DOWN, pygame.K_LEFT: E.JOY_LEFT,
             pygame.K_RIGHT: E.JOY_RIGHT, pygame.K_SPACE: E.JOY_B,
             pygame.K_TAB: E.JOY_SELECT, pygame.K_RETURN: E.JOY_START}
-KEYS = {pygame.K_d: "toggle_lightning", pygame.K_m: "toggle_music", pygame.K_e: "toggle_effects",
+KEYS = {pygame.K_l: "next_look", pygame.K_d: "toggle_lightning", pygame.K_m: "toggle_music",
+        pygame.K_e: "toggle_effects",
         pygame.K_v: "next_view",
         pygame.K_p: "toggle_pause", pygame.K_s: "screenshot", pygame.K_f: "toggle_fullscreen",
         pygame.K_h: "toggle_help"}
@@ -52,7 +53,7 @@ class GameWindow:
         pygame.display.init()  # not pygame.init(): that opens pygame's own mixer too, a second sound stream
         self.core = E.Core()
         self.core.load(rom_path)
-        self.music = MusicPlayer(chiptune.load_songs(self.look.pack.folder))
+        self.music = self.music_for(self.look)
         self.sound = SoundBoard(self.music)
         self.audio = E.AudioOut(int(self.core.av_info().timing.sample_rate), mixer=self.sound.mixer)
         self.note, self.note_frames = "", 0   # a moment's message on screen ("SOUND: ORIGINAL")
@@ -164,6 +165,22 @@ class GameWindow:
         self.paused = not self.paused
         self.audio.expect = not self.paused
         self.music.paused = self.paused
+
+    def music_for(self, look):
+        """The look's pack's soundtrack, on the look's sound chip."""
+        return MusicPlayer(chiptune.load_songs(look.pack.folder), look.synth)
+
+    def next_look(self):
+        """The next look (each with its own pack), and its soundtrack on its own chip."""
+        platforms = sorted(looks.LOOKS)
+        platform = platforms[(platforms.index(self.look.platform) + 1) % len(platforms)]
+        self.look = looks.make(platform, self.game.rom)
+        on = self.music.on
+        self.music = self.music_for(self.look)
+        self.music.on = on
+        self.sound.music = self.music
+        pygame.display.set_caption(f"{paths.APP_NAME} - {self.look.name}")
+        self.show_note(self.look.name)
 
     def toggle_music(self):
         self.show_note("MUSIC: " + ("ON" if self.music.toggle() else "OFF"))

@@ -1,11 +1,12 @@
 """Haunted House, remastered: the Atari 2600 game running unmodified in an emulator, redrawn live in a new
 look, with the original alongside.
 
-Usage: python play.py [ROM] [--look nes] [--pack <pack>]
+Usage: python play.py [ROM] [--look nes|snes] [--pack <pack>]
 
 Keys (H in the game shows them; the list is app/controls.py):
        arrows + space   the joystick: move, light a match, drop what you carry
        Tab / Enter      GAME SELECT / GAME RESET
+       L   the next look: NES, SNES (each with its own pack, and its own sound chip for the music)
        D   the left difficulty switch: lightning on (B, the default) or off (A)
        M   the soundtrack on or off
        E   the sound effects: remastered (the default) or the original 2600 sound

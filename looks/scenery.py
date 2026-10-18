@@ -47,9 +47,10 @@ class Scene:
         paint_faces(full, faces, face)
         outline(full, self.walls, faces, look.outline_colour(), trim_colour(look, world, number))
         shade_below_faces(full, faces, self.walls, look)
-        decorate(full, faces, [look.adapt(picture) for picture in world.get(f"decor{number}") or []], floor)
+        decorations = [look.adapt_scenery(picture) for picture in world.get(f"decor{number}") or []]
+        decorate(full, faces, decorations, floor)
         if floor == 0 and world.get("front_door"):
-            draw_front_door(full, self.walls, look.adapt(world.get("front_door")[0]))
+            draw_front_door(full, self.walls, look.adapt_scenery(world.get("front_door")[0]))
         self.full = full
         self.dim = look.dimmed(full)
         self.dark = look.dimmed(self.dim)
@@ -58,7 +59,7 @@ class Scene:
 
 def tile(look, frames, width, height):
     """A world picture, through the look's colours, scaled to width x height (RGB)."""
-    return look.adapt(fit(frames[0], width, height))[..., :3]
+    return look.adapt_scenery(fit(frames[0], width, height))[..., :3]
 
 
 def wall_mask(rom):
@@ -124,7 +125,7 @@ def trim_colour(look, world, number):
     frames = world.get(f"wall{number}_trim")
     if not frames:
         return None
-    return look.adapt(frames[0])[0, 0, :3]
+    return look.adapt_scenery(frames[0])[0, 0, :3]
 
 
 def shade_below_faces(full, faces, walls, look):

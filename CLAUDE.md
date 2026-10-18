@@ -9,7 +9,8 @@ copies its generic pieces from. How the game was worked out: [docs/taking-it-apa
 
 ## The words
 
-- **look**: the console - colour rules, status line, title and win screens (`looks/`: nes).
+- **look**: the console - colour rules, light, status line, title and win screens, and its sound chip for the
+  music (`looks/`: nes, snes).
 - **cast**: who - the eyes, the ghost, the bat, the tarantulas, the key, the scepter, the urn, the stairs.
 - **world**: where - each floor's wall tops, faces, floor tiles and decorations, the front door, the title
   screen's mansion and moon; and a soundtrack (`music.json`).
@@ -27,7 +28,9 @@ python tools/preview.py                    # the look in every situation, as one
 python tests/golden.py                     # every look still draws the same pixels
 python tests/test_facing.py                # monsters face the way they walk
 python packs/classic/source/draw.py        # regenerate the classic pack's PNGs from its text art
+python packs/nocturne/source/draw.py       # ...and the nocturne pack's (the SNES look's own)
 python music/chiptune.py                   # the classic soundtrack as WAVs in shots/music/, to listen to
+python -m music.orchestra                  # ...and on the SNES look's orchestra
 python -m music.effects                    # the remastered sound effects as WAVs in shots/effects/
 python tests/test_events.py                # each effect fires on the right event in the running game
 ruff check --config ruff.toml .            # the readability rules

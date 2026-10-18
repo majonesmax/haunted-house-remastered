@@ -15,7 +15,9 @@ import threading
 
 import numpy as np
 
-from music import chiptune
+from music import chiptune, orchestra
+
+SYNTHS = {"chiptune": chiptune, "orchestra": orchestra}   # a look's sound chip (Look.synth) -> its synth
 
 CALM_FRAMES = 120   # the tension music keeps on this long after the last monster has left the room
 KNEE, TOP = 28000.0, 32767.0  # mixing: above the knee, peaks are rounded off instead of clipping
@@ -56,9 +58,12 @@ class Piece:
 
 
 class MusicPlayer:
-    def __init__(self, songs):
+    """A pack's songs, played on a look's sound chip ("chiptune" for the NES, "orchestra" for the SNES)."""
+
+    def __init__(self, songs, synth="chiptune"):
         self.songs = songs
-        self.rendered = {name: chiptune.render(song) for name, song in songs.items()}
+        render = SYNTHS[synth].render
+        self.rendered = {name: render(song) for name, song in songs.items()}
         self.loops = {}          # name -> its Piece, kept so it resumes where it was
         self.lock = threading.Lock()
         self.current = None

@@ -6,8 +6,9 @@
 
 import content
 from looks.nes.look import NesLook
+from looks.snes.look import SnesLook
 
-LOOKS = {"nes": NesLook}
+LOOKS = {"nes": NesLook, "snes": SnesLook}
 
 
 def make(platform, rom, pack_name=None):
