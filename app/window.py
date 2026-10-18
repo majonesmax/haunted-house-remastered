@@ -48,7 +48,8 @@ KEYS = {pygame.K_l: "next_look", pygame.K_d: "toggle_lightning", pygame.K_m: "to
         pygame.K_e: "toggle_effects",
         pygame.K_v: "next_view",
         pygame.K_p: "toggle_pause", pygame.K_s: "screenshot", pygame.K_f: "toggle_fullscreen",
-        pygame.K_h: "toggle_help", pygame.K_r: "toggle_recording", pygame.K_g: "give_hint"}
+        pygame.K_h: "toggle_help", pygame.K_r: "toggle_recording", pygame.K_g: "give_hint",
+        pygame.K_o: "toggle_lights"}
 LEFT_DIFFICULTY_A, LEFT_DIFFICULTY_B = 10, 12  # the Stella core's buttons for the left switch (docs)
 SWITCH_FRAMES = 3                              # hold a switch button this long for the core to see it
 FPS = 60
@@ -59,7 +60,7 @@ HINT_FRAMES = 360               # ...and a hint, which takes longer to read
 HINT_FORGETS = 15 * 60          # frames after which the next G starts the hints from the goal again
 NOTE_Y = 182                    # where it goes: the bottom of the view
 NOTE_LINE = 11                  # pixels from one line of a message to the next
-WHITE, GREY, RED = (236, 238, 236), (152, 150, 152), (230, 40, 40)
+WHITE, GREY, RED, AMBER = (236, 238, 236), (152, 150, 152), (230, 40, 40), (240, 180, 60)
 
 
 class GameWindow:
@@ -83,6 +84,7 @@ class GameWindow:
         self.panel = RamPanel()
         self.note, self.note_frames = [], 0   # a moment's message on screen: its lines ("SOUND: ORIGINAL")
         self.hint_level, self.last_hint = 0, None   # G: how many hints in a row, and the frame of the last
+        self.lights_on = False    # O: the cheat - the whole floor lit, everything on it shown
         self.view = "both"
         self.paused = self.fullscreen = False
         self.help = 0   # H: 0 hidden, 1 the keys, 2 how to play
@@ -137,6 +139,7 @@ class GameWindow:
         """One frame of the game: run it, hear it, draw it (each look that's needed), record it."""
         self.step_game()
         state = self.state = self.game.state(self.core.ram)
+        state.lights_on = self.lights_on
         flash, thunder = self.weather(state)
         extras = Extras(self.intro, flash)
         self.sound.follow(state, self.intro, thunder)
@@ -217,6 +220,8 @@ class GameWindow:
         canvas = V.compose(self.view, playing, self.core.frame, grid_extras)
         if self.recorder.active and self.frame_no // 30 % 2 == 0:
             draw_recording_light(canvas)
+        if self.lights_on:
+            draw_cheat_mark(canvas)
         return canvas
 
     def show(self, loading=False):
@@ -313,6 +318,12 @@ class GameWindow:
         """A message on screen for a moment: one line, or a list of them."""
         self.note, self.note_frames = [text] if isinstance(text, str) else text, frames
 
+    def toggle_lights(self):
+        """O: the cheat - turn the lights on (everything on the floor shows), or off again."""
+        self.lights_on = not self.lights_on
+        on = ["LIGHTS ON - A CHEAT.", "O AGAIN TURNS THEM OFF."]
+        self.show_note(on if self.lights_on else "LIGHTS OFF")
+
     def give_hint(self):
         """G: the goal, then the way, then tips - one more each press (game/hints.py)."""
         if self.state is None:
@@ -354,6 +365,12 @@ class GameWindow:
         os.makedirs(paths.SCREENSHOTS, exist_ok=True)
         name = time.strftime("haunted-%Y%m%d-%H%M%S.png")
         Image.fromarray(self.canvas()).save(os.path.join(paths.SCREENSHOTS, name))
+
+
+def draw_cheat_mark(canvas):
+    """While the lights are on: LIGHTS ON, top right, in amber - on the window, never in a recording."""
+    words = "LIGHTS ON"
+    hud.draw_text(canvas, words, canvas.shape[1] - hud.text_width(words) - 6, 6, AMBER)
 
 
 def draw_recording_light(canvas):

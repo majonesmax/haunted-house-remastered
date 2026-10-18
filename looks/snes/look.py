@@ -89,6 +89,8 @@ class SnesLook(NesLook):
     def light(self, state, layers, rows, frame_no):
         """A smooth, warm gradient around the match (hottest at the flame) over the unlit scene: moonlit
         walls in game 1, black in games 2-9, the walls washed pale in a lightning flash."""
+        if state.lights_on:   # the player's cheat: every lamp in the house lit
+            return snes_rgb(layers.full)
         full, walls = layers.full.astype(float), layers.walls[..., None]
         reach = light_reach_grid(state, rows) / flicker(frame_no)
         if not state.dark:

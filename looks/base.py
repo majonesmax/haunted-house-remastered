@@ -174,6 +174,8 @@ class FloorLook(Look):
         dithered fade at the edge of its reach, and outside it dim (game 1), black (games 2-9) or the walls
         in a lightning flash."""
         full, dim, flash, walls = layers.full, layers.dim, layers.flash, layers.walls
+        if state.lights_on:   # the player's cheat: every lamp in the house lit
+            return full
         reach = light_reach_grid(state, rows) / flicker(frame_no)
         if not state.dark:  # game 1: the walls are always seen; the floor is dark until lit
             unlit = np.where(walls[..., None], full, layers.dark)

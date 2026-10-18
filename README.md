@@ -121,6 +121,7 @@ In the game, **H** shows all of these.
 | R | record (videos of each look and the 2600, the sound, the RAM, a log) |
 | S / P / F | screenshot / pause / fullscreen |
 | G | a hint: the goal, then which way to go, then a tip - press again for more |
+| O | lights on: the whole floor lit and everything on it shown - a cheat, for when you just want to see |
 | H | the keys, then how to play |
 | Esc | quit |
 

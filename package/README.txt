@@ -38,6 +38,7 @@ KEYS (in the game, H shows them all)
                    House"; needs ffmpeg installed: https://ffmpeg.org/download.html)
   P                pause
   G                a hint: the goal, then which way to go, then a tip (press again for more)
+  O                lights on: the whole floor lit, everything on it shown (a cheat)
   H                the keys, then how to play
   Esc              quit
 

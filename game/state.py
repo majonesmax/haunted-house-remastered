@@ -54,10 +54,13 @@ class GameState:
     sound           the sound effect playing (game/sounds.py numbers them), 0 = none
     clock           the game's frame counter, 0-255
     ram             the 128 bytes themselves, indexed from $80 - for the debug view, not for looks
+    lights_on       not the game's: the player's cheat (O) - the whole floor lit, everything on it shown
+                    (game/visibility.py). False unless the window turns it on.
     """
 
     def __init__(self, ram, rom, palette):
         self.ram = ram
+        self.lights_on = False
         self.mode = MODES.get(self.byte(M.GAME_STATE), "playing")
         self.game = min(self.byte(M.GAME_NUMBER), 8) + 1
         self.floor = self.byte(M.FLOOR) & 3

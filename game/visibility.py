@@ -11,6 +11,9 @@ The RAM says where everything is; these rules say what's visible. All were check
 - Monsters: in game 1 any on your floor; in games 2-9 only those in your room (or the room beyond the
   doorway you stand in) - lit or not - and all on your floor while you die.
 - Stairs: this room's, while a match is lit.
+
+The one exception is a cheat the player turns on (O, state.lights_on): the lights come on, and everything on
+the floor shows where the game has it - walls, items, monsters and stairs, lit or not.
 """
 
 import numpy as np
@@ -23,7 +26,7 @@ LIGHT_HALF_WIDTH, LIGHT_HALF_HEIGHT = 16, 14   # the 2600 glow: 32 wide, 28 tall
 
 
 def walls_visible(state):
-    return not state.dark or state.lightning
+    return not state.dark or state.lightning or state.lights_on
 
 
 def on_screen(state, y, height=1):
@@ -42,26 +45,29 @@ def light_distance(state, x, y):
 
 
 def item_visible(state, item):
-    if not state.match_lit or item.floor != state.floor or item.number == state.carried:
+    lit_enough = state.match_lit or state.lights_on
+    if not lit_enough or item.floor != state.floor or item.number == state.carried:
         return False
     if item.number == KEY and state.game < 3:
         return False
     if item.number >= 2 and item.shape == JOINED:
         return False
+    if state.lights_on:
+        return on_screen(state, item.y, 8)
     return light_distance(state, item.x, item.y) < ITEM_REACH
 
 
 def monster_visible(state, monster):
     if monster.floor != state.floor:
         return False
-    if not state.dark or state.mode == "dying":
+    if not state.dark or state.mode == "dying" or state.lights_on:
         return on_screen(state, monster.y, 10)
     in_room = state.monsters_here > 0 and monster.room in (state.room, state.room_beyond)
     return in_room and on_screen(state, monster.y, 10)
 
 
 def stairs_visible(state):
-    return state.match_lit and state.stairs is not None
+    return (state.match_lit or state.lights_on) and state.stairs is not None
 
 
 def light_reach(state, xs, ys):
