@@ -10,7 +10,7 @@ import os
 import sys
 
 APP_NAME = "Haunted House"
-APP_VERSION = "1.0"
+APP_VERSION = "1.1"
 FROZEN = getattr(sys, "frozen", False)
 if FROZEN:  # a packaged app: everything bundled is unpacked here
     ROOT = getattr(sys, "_MEIPASS", None)

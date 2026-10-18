@@ -55,6 +55,33 @@ and the remasters only *draw* it.
 
 ![The ending, in both looks](docs/media/endings.png)
 
+## How to play
+
+The original kept its rules in the manual, so here they are. In the game, **H** twice shows them too, and
+each game number's rules are on the title screen.
+
+- **The goal:** find the three pieces of the urn, join them, and carry the whole urn **out of the front
+  door** - on floor 1, the right-hand edge of the room you start in. Holding the whole urn isn't winning;
+  getting out with it is. (When the urn comes together, the game reminds you.)
+- **Light a match (Space) to see - and to pick anything up.** Things only show close to a burning match,
+  and you take one by walking into it while the match is lit. Without a match, you walk straight past.
+- **You hold one thing at a time.** Walk into something else (match lit) and you swap. Carry a piece into
+  another piece to join them.
+- **The pieces are somewhere different every game**, on any of the four floors. The stairs are at the
+  rooms' edges: walk off them to climb.
+- **A match burns about 20 seconds**, and a monster in the room blows it out. Fewer matches, better score.
+  Touch a monster and you lose one of your nine lives. The scepter keeps monsters off you (not the ghost in
+  games 8 and 9); the master key opens locked doors (games 3 to 9).
+- **Game 1 is the gentlest:** the walls always show. From game 2 the house is dark except in the lightning.
+
+Stuck?
+
+- **G** gives a hint: how many pieces are left and which way the nearest is (up or down the stairs, or which
+  way across the floor), how to take it once you're in its room, and with the whole urn, which way to the
+  front door. It points; it never marks anything on screen.
+- **O** turns the lights on - a cheat, for when you just want to see where everything is. It only shows
+  things: **you still need a lit match to pick anything up.**
+
 ## Running it from the source
 
 Needs Python 3.10 or newer, and your own copy of the game (the ROM isn't included; [which one](#download)).
@@ -69,13 +96,6 @@ python play.py                         # drop your ROM onto the window the first
 
 More: `python play.py --look snes`, `--grid`, `--pack <name>`, `--help`. Recording (R) needs
 [ffmpeg](https://ffmpeg.org). On Linux, sound needs your distribution's PortAudio (e.g. `libportaudio2`).
-
-Stuck? **G** gives a hint - which way to the nearest piece, or to the front door once the urn is whole -
-without marking anything on screen. When the urn comes together, the game reminds you it isn't won until
-it's out of the door.
-
-New to the game? Press **H** twice in the game: what you're trying to do, and the rules the original never
-explains. Each game number's rules show on the title screen.
 
 ## Building the downloads
 
@@ -160,6 +180,9 @@ them, reveal only what the original reveals, art is text, and prove nothing else
 pip install -r requirements-dev.txt
 python tools/preview.py                # every look in every situation, as one picture - look at it
 python tests/golden.py                 # every look still draws exactly the same pixels
+python tests/test_hints.py             # G's hints point the right way, in the running game
+python tests/test_events.py            # each sound effect fires on the right event
+python play.py --check                 # the app plays itself for a few seconds and says whether it works
 ruff check --config ruff.toml .        # the readability rules
 ```
 
