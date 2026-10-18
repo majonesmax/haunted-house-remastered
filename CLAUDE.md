@@ -4,8 +4,11 @@ Notes for Claude Code (or any coding assistant) working in this repository. Peop
 tour.
 
 Atari 2600 *Haunted House* runs unmodified in the Stella emulator; every frame, the game's 128 bytes of RAM are
-read and the scene is redrawn. It's the sister project of Adventure Forever (`../adventure-nes`), which it
-copies its generic pieces from. How the game was worked out: [docs/taking-it-apart.md](docs/taking-it-apart.md).
+read and the scene is redrawn. It's the sister project of
+[Adventure Forever](https://github.com/majonesmax/adventure-forever) (`../adventure-nes` beside this one, if you
+have it), which it copies its generic pieces from. How the game was worked out:
+[docs/taking-it-apart.md](docs/taking-it-apart.md); how the code fits together:
+[docs/architecture.md](docs/architecture.md); everything else: [docs/README.md](docs/README.md).
 
 ## The words
 
@@ -23,7 +26,8 @@ Any look shows any pack. A look never knows about a particular pack, and a pack 
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
 python tools/get_core.py                   # the pinned Stella core (or copy cores/ from adventure-nes)
-python play.py                             # play (your ROM is roms/haunted_house.a26)
+python play.py                             # play (your ROM: roms/haunted_house.a26, or drop it on the window)
+python play.py --grid                      # ...in the grid: both looks, the 2600 and its live RAM
 python tools/preview.py                    # the look in every situation, as one PNG - look at it
 python tests/golden.py                     # every look still draws the same pixels
 python tests/test_facing.py                # monsters face the way they walk
@@ -35,6 +39,7 @@ python -m music.effects                    # the remastered sound effects as WAV
 python -m music.orchestral_effects         # ...and the SNES look's, played by the orchestra
 python -m music.ambience                   # the house's ambience (rain, thunder, floorboards, noises) in shots/ambience/
 python tests/test_events.py                # each effect fires on the right event in the running game
+python tools/readme_media.py               # the README's pictures (the looks' own art only)
 ruff check --config ruff.toml .            # the readability rules
 ```
 

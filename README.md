@@ -1,87 +1,107 @@
 # Haunted House, remastered
 
-Atari 2600 *Haunted House* (James Andreasen, 1982) running *unmodified* in the Stella emulator, with every
-frame redrawn live from the game's 128 bytes of RAM, in the spirit of [Adventure Forever](../adventure-nes).
-Two looks, with the 2600 original alongside: **NES**, an 8-bit remaster, and **SNES**, a 16-bit one - smooth
-warm matchlight, moonlit walls, a see-through ghost, art in 16-bit colour ramps, and the soundtrack on a
-small gothic orchestra. L switches between them while you play.
+![The same moment in the two looks: the NES remaster and the SNES remaster](docs/media/looks.png)
 
-The research came first: what every byte of RAM means, what's in the ROM, and how the game works, each claim
-checked against the running game. That's below, under *What we know*.
+Atari 2600 **Haunted House** (James Andreasen, 1982) running *unmodified* in an emulator, with every frame
+redrawn live from the game's 128 bytes of RAM. It's the sister project of
+[Adventure Forever](https://github.com/majonesmax/adventure-forever), and works the same way.
+
+Two **looks**, and **L** switches between them while you play:
+
+- **NES**: an 8-bit remaster. A Victorian manor in the NES's 64 colours, a matchlight that dithers into the
+  dark, and a gothic chiptune soundtrack.
+- **SNES**: a 16-bit remaster. Smooth warm matchlight with dust drifting in it, moonlit walls, a see-through
+  ghost, art in 16-bit colour ramps, and the soundtrack and sound effects on a small gothic orchestra.
+
+Both bring the house to life without changing the game: portraits whose eyes follow you, candles that flicker,
+a storm outside, rain and creaking floorboards in the quiet attic, a story at the start, and a real ending -
+dawn behind the mansion as you walk away with the urn.
+
+The original 2600 picture can run alongside, and a **four-way grid** shows your game, the other look, the
+original, and the game's live RAM at once - every byte, what it means, and a log of what happened
+([how to read it](docs/reading-the-ram.md)). Gameplay is 100% the original: the emulator runs the real game,
+and the remasters only *draw* it.
+
+![The ending, in both looks](docs/media/endings.png)
 
 ## Playing it
 
-You need your own copy of the ROM at `roms/haunted_house.a26`, and the Stella emulator core in `cores/`
-(`python tools/get_core.py` downloads the pinned one, or copy it from `../adventure-nes/cores`).
+Needs Python 3.10 or newer, and your own copy of the game (the ROM isn't included).
 
 ```sh
-python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python play.py
+python -m venv .venv
+source .venv/bin/activate              # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+python tools/get_core.py               # downloads the Stella emulator core for your system into cores/
+python play.py                         # drop your ROM onto the window the first time; it's remembered
 ```
+
+**Which ROM:** the NTSC cartridge of Haunted House (Atari CX2654), MD5 `f0a6e99f5875891246c3dbecbf2d2cea`.
+Everything here was worked out and checked on that one.
+
+More: `python play.py --look snes`, `--grid`, `--pack <name>`, `--help`. Recording (R) needs
+[ffmpeg](https://ffmpeg.org). On Linux, sound needs your distribution's PortAudio (e.g. `libportaudio2`).
+
+New to the game? Press **H** twice in the game: what you're trying to do, and the rules the original never
+explains. Each game number's rules show on the title screen.
+
+## Controls
+
+In the game, **H** shows all of these.
 
 | Key | |
 |---|---|
-| Arrows, Space | the joystick: move; light a match (with one lit, drop what you carry) |
-| Tab / Enter | GAME SELECT / GAME RESET |
-| L | the next look: NES or SNES (each with its own pack, and its own sound chip for the music) |
-| D | the left difficulty switch: lightning on (B, the default) or off (A) |
-| M | the soundtrack on or off |
-| E | the sound effects: remastered (the default) or the original 2600 sound |
-| V | view: side by side, remaster only, 2600 only |
-| P / S / F / H / Esc | pause, screenshot, fullscreen, help, quit |
+| Arrows | move |
+| Space | light a match; with one lit, put down what you carry |
+| Tab / Enter | GAME SELECT (games 1-9) / GAME RESET (start) |
+| L | the next look: NES or SNES (each with its own pack and its own sound chip) |
+| V | view: side by side with the 2600 -> the remaster alone -> the 2600 alone -> the grid |
+| M | the soundtrack on or off (off leaves the house's own sounds) |
+| E | sound: remastered (the default) or the original 2600 sound |
+| D | the left difficulty switch: lightning on (the default) or off |
+| R | record (videos of each look and the 2600, the sound, the RAM, a log) |
+| S / P / F | screenshot / pause / fullscreen |
+| H | the keys, then how to play |
+| Esc | quit |
 
-How it's built: the game runs in `game/emulator.py`; `game/state.py` turns its RAM into a `GameState`;
-`game/visibility.py` holds the original's rules for what may be seen; a look in `looks/` draws it, with a
-pack's cast and world from `packs/` (the original 2600 graphics for anything a pack leaves out). A pack's
-soundtrack (`music.json`, original chiptune) is rendered by `music/chiptune.py` and follows the game
-(`music/player.py`): a theme per floor, tension when a monster is in your room, jingles for a lost life, game
-over and the win. The game's own sound effects are replaced by remastered ones (`music/effects.py`) that
-say what happened - a match striking, a door creaking, steps going up or down the stairs, a key's jingle -
-worked out from the game's state (`music/events.py`); E brings back the original 2600 sound. The rules for
-working on it are in [CLAUDE.md](CLAUDE.md).
+## How it works
 
-## What we know
+The 2600 has no screen memory. Everything about the game - which floor and room you're in, where the five
+items and five monsters are, what you carry, how long the match has left - lives in 128 bytes of RAM. Every
+frame we read that RAM through the libretro API and draw our own picture from it, using the ROM's own wall
+plan and tables, read from your ROM at run time. The remasters can't change how the game plays, and what
+they show follows the original's own rules for what may be seen in the dark.
 
-- **[docs/taking-it-apart.md](docs/taking-it-apart.md)**: start here. How the game was worked out, the
-  methods and why, what went wrong, and how it compares with the disassembly.
-- **[docs/generated/ram-xref.md](docs/generated/ram-xref.md)**: all 128 bytes, each with its name, meaning,
-  how sure we are, and every routine that reads or writes it. Generated from `game/ram_map.py`.
-- **[docs/rom-elements.md](docs/rom-elements.md)**: everything in the ROM, grouped by look, world, cast and
-  rules, plus what's still to learn.
-- **[docs/screen-and-sound.md](docs/screen-and-sound.md)**: where everything is drawn, what each game shows,
-  the switches, and every sound - with the emulator's frame blending explained.
-- **[docs/monsters.md](docs/monsters.md)**: how the monsters wander, chase, follow you and get scattered -
-  checked by a model that predicts the real game frame for frame.
-- **`shots/rom_cast.png`** and **`shots/rom_mansion.png`**: every sprite, and the plan of every floor, drawn
-  from the ROM's own tables.
-
-In short: the player is a pair of eyes on one of four floors. Each floor is a single tall map that scrolls,
-with six rooms joined by seven doors and stairs at the outer edges. The positions of the player, the five
-items and up to five monsters sit in parallel tables in RAM ($A0–$C9). The urn is three pieces that join
-into one; carry the whole urn out of the front door to win.
-
-## Tools
-
-Run with `.venv/bin/python`:
-
-| Command | What it does |
+| Folder | What's in it |
 |---|---|
-| `tools/verify_ram.py` | Plays scripted experiments and checks each claim about RAM and the ROM tables (65 so far) |
-| `tools/verify_games.py` | Checks every rule that changes with the game number, in all nine games (153 checks) |
-| `tools/verify_screen.py` | Checks where walls, eyes and sprites are drawn, pixel for pixel, against the formulas |
-| `tools/verify_sounds.py` | Checks `game/sounds.py` frame by frame, measures the win tune's pitch, saves each sound to `shots/sounds/` |
-| `tools/verify_monsters.py` | Runs the game beside `game/monsters.py` and checks it predicts every monster byte, every frame |
-| `tools/monster_paths.py` | Draws the monsters' waypoints and the paths they really walked into `shots/monster_paths.png` |
-| `tools/xref.py` | Traces the ROM's code; regenerates `docs/generated/` |
-| `tools/rom_sheet.py` | Draws the ROM's sprites, palette and floor plans into `shots/` |
-| `tools/lab.py` | The lab the others use: the emulator plus save states and RAM pokes, for experiments |
-| `tools/preview.py` | The look in twelve scripted situations, beside the original, as one picture |
-| `tests/golden.py` | Every look still draws exactly the same pixels in those situations |
+| `game/` | the game itself: the emulator, the RAM map, the ROM's tables, the game's state (`GameState`), the rules for what can be seen, a Python copy of the monster code |
+| `looks/` | how it's drawn (the consoles): the look contract (`base.py`), the floor in 3/4 view (`scenery.py`), the NES and SNES looks |
+| `content/` | what's drawn: casts (who) and worlds (where), loaded from packs |
+| `packs/` | the packs: `classic` (the NES look's) and `nocturne` (the SNES look's), each drawn as text art in `source/` |
+| `music/` | the soundtrack (chiptune and orchestra synths), the sound effects, the ambience, and what triggers them |
+| `app/` | the window: views, the grid's RAM pane, recording, the ROM |
+| `shared/` | pixel-art helpers, palettes, the pixel font, the storm |
+| `tools/` | the research checks, the preview, the art and media pipelines |
+| `tests/` | pixel-exact "golden" tests of every look, and checks of facing and sound events |
 
-Pokes are for experiments only. A remaster must never write the game's RAM while someone plays.
+**[A guide to all the documentation →](docs/README.md)**, starting with
+[how the game was taken apart](docs/taking-it-apart.md) and [how the code fits together](docs/architecture.md).
 
-## Sources
+## Working on it
 
-- `reference/disassembly`: Brandon Roberts' commented disassembly (a work in progress; our own trace and
-  experiments correct it in places, noted in `docs/rom-elements.md`).
-- The running game, through `tools/verify_ram.py`.
+The rules for working on it, for people and AI assistants alike, are in [CLAUDE.md](CLAUDE.md): the words
+(look, cast, world, pack), the commands, and the rules - never change the game, draw things where the game has
+them, reveal only what the original reveals, art is text, and prove nothing else moved.
+
+```sh
+pip install -r requirements-dev.txt
+python tools/preview.py                # every look in every situation, as one picture - look at it
+python tests/golden.py                 # every look still draws exactly the same pixels
+ruff check --config ruff.toml .        # the readability rules
+```
+
+## Licence
+
+The code is MIT ([LICENSE](LICENSE)); the art in `packs/` is CC BY 4.0 ([LICENSE-ASSETS.md](LICENSE-ASSETS.md)).
+Not included: Haunted House itself (© 1982 Atari) - bring your own ROM - and the Stella emulator core (GPL-2.0,
+downloaded by `tools/get_core.py`).

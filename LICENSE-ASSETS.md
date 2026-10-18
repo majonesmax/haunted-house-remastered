@@ -4,9 +4,10 @@ The original art in this repository is licensed under the
 **Creative Commons Attribution 4.0 International License (CC BY 4.0)**:
 https://creativecommons.org/licenses/by/4.0/
 
-That covers the packs under `packs/` - their casts, worlds and text-art sources: `classic` (the eyes, the
-ghost, the bat, the tarantulas, the master key, the scepter, the urn, the stairs; the brick wall, floor and
-front door tiles).
+That covers the packs under `packs/` - their casts, worlds, soundtracks and text-art sources: `classic` (the
+NES look's: the eyes, the ghost, the bat, the tarantulas, the master key, the scepter, the urn, the stairs,
+the hood and hand; the manor's walls, floors, decorations and front door; the title's mansion and moon) and
+`nocturne` (the SNES look's, the same in 16-bit colour) - and the pictures in `docs/media/`, which show them.
 
 Credit: "Haunted House remaster contributors".
 

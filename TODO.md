@@ -33,9 +33,11 @@ What's next for the remaster, roughly in order. Tick items off as they're done.
 
 ## 5. Show it off, as Adventure Forever does
 
-- [ ] The four-way grid view: your game, the other look, the 2600 original and a live RAM panel with an
+- [x] The four-way grid view: your game, the other look, the 2600 original and a live RAM panel with an
       event log
-- [ ] Recording; packaged downloads; dropping your ROM on the window
+- [x] Recording; dropping your ROM on the window
+- [x] A README, and a guide to all the documentation (docs/README.md)
+- [ ] Packaged downloads (macOS and Windows), as Adventure Forever's package/build.py
 
 ## Housekeeping
 
