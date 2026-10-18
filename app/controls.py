@@ -16,6 +16,6 @@ CONTROLS = [
     ("P", "PAUSE"),
     ("S", "SCREENSHOT"),
     ("F", "FULLSCREEN"),
-    ("H", "HELP"),
+    ("H", "HELP, HOW TO PLAY"),
     ("ESC", "QUIT"),
 ]

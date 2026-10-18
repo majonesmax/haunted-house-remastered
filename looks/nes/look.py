@@ -8,7 +8,8 @@ packs/classic.
 
 import numpy as np
 
-from looks.base import FloorLook
+from game import guide
+from looks.base import INTRO_FRAMES, FloorLook
 from looks.layout import SCREEN_H, SCREEN_W, VIEW_H, VIEW_W, VIEW_X, VIEW_Y
 from shared import hud
 from shared import palettes as PAL
@@ -40,6 +41,10 @@ MOON_AT, MOON_SCALE = (184, 52), 2
 MANSION_SCALE = 3
 MANSION_AT = (32, 120)                          # 64 x 40 art at three times: the hill meets the bottom
 LOGO_Y, GAME_Y, HINT_Y = 22, 46, 226
+RULES_X, RULES_Y, RULE_SPACING = 12, 62, 10     # the game's rules, down the left (clear of the moon)
+INTRO_Y, INTRO_SPACING, INTRO_EYES_Y = 48, 14, 176
+INTRO_LINE_FRAMES = 45                          # the story appears a line at a time
+BANNER_TOP, BANNER_H = 10, 30                   # a floor's name, near the top of the view
 TITLE_LIGHTNING_EVERY, TITLE_LIGHTNING_FRAMES = 330, 4
 TITLE_LOOKS = ("centre", "left", "centre", "right", "up", "centre")
 TITLE_LOOK_FRAMES = 40
@@ -192,8 +197,33 @@ class NesLook(FloorLook):
         if game_over:
             matches = f"MATCHES USED {state.matches_used}"
             hud.draw_text(screen, matches, centred(matches), GAME_Y + 12, GREY)
-        hint = "SELECT: TAB   START: ENTER"
+        else:
+            for row, rule in enumerate(guide.game_rules(state.game)):
+                hud.draw_text(screen, rule, RULES_X, RULES_Y + row * RULE_SPACING, GREY)
+        hint = "TAB GAME   ENTER PLAY   H HELP"
         hud.draw_text(screen, hint, centred(hint), HINT_Y, GREY)
+
+    def draw_intro(self, screen, frame_no):
+        """The story, a line at a time, over the dark; the eyes watching from below."""
+        screen[:] = BLACK
+        shown = frame_no // INTRO_LINE_FRAMES + 1
+        for row, line in enumerate(guide.STORY[:shown]):
+            hud.draw_text(screen, line, centred(line), INTRO_Y + row * INTRO_SPACING, WHITE)
+        eyes = self.picture("eyes_blink" if frame_no % 120 < 6 else "eyes_centre", frame_no)
+        if eyes is not None:
+            blit(screen, eyes, (SCREEN_W - eyes.shape[1]) // 2, INTRO_EYES_Y)
+        if frame_no > INTRO_FRAMES // 3:
+            hint = "ENTER: PLAY"
+            hud.draw_text(screen, hint, centred(hint), HINT_Y, DIM_GREY)
+
+    def draw_banner(self, screen, name, subtitle, left):
+        """The floor's name in a box across the top of the view."""
+        width = max(hud.text_width(name), hud.text_width(subtitle)) + 24
+        x0, y0 = (SCREEN_W - width) // 2, VIEW_Y + BANNER_TOP
+        screen[y0:y0 + BANNER_H, x0:x0 + width] = BLACK
+        hud.frame_box(screen, x0, y0, x0 + width - 1, y0 + BANNER_H - 1, GREY)
+        hud.draw_text(screen, name, centred(name), y0 + 6, WHITE)
+        hud.draw_text(screen, subtitle, centred(subtitle), y0 + 18, GREY)
 
     def draw_world_picture(self, screen, name, at, scale):
         """A world picture (the pack's own title art), scaled up, at (x, y); None if the pack has none."""

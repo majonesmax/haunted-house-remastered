@@ -19,6 +19,7 @@ from PIL import Image
 
 import looks
 from app.controls import CONTROLS
+from game import guide
 from music import chiptune
 from music.board import SoundBoard
 from music.player import MusicPlayer
@@ -64,7 +65,8 @@ class GameWindow:
         self.audio = E.AudioOut(int(self.core.av_info().timing.sample_rate), mixer=self.sound.mixer)
         self.note, self.note_frames = "", 0   # a moment's message on screen ("SOUND: ORIGINAL")
         self.view = "both"
-        self.paused = self.help = self.fullscreen = False
+        self.paused = self.fullscreen = False
+        self.help = 0   # H: 0 hidden, 1 the keys, 2 how to play
         self.lightning = True          # the left difficulty switch at B, the console's default
         self.switch_held = 0
         self.frame_no = 0
@@ -127,8 +129,10 @@ class GameWindow:
         else:
             gap = np.zeros((SCREEN_H, GAP, 3), np.uint8)
             canvas = np.concatenate([self.picture, gap, original], axis=1)
-        if self.help:
+        if self.help == 1:
             draw_help(canvas)
+        elif self.help == 2:
+            draw_how_to_play(canvas)
         if self.note_frames:
             draw_note(canvas, self.note)
         return canvas
@@ -207,7 +211,8 @@ class GameWindow:
         self.note, self.note_frames = text, NOTE_FRAMES
 
     def toggle_help(self):
-        self.help = not self.help
+        """H: the keys, then how to play, then neither."""
+        self.help = (self.help + 1) % 3
 
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
@@ -224,6 +229,15 @@ def draw_note(canvas, text):
     top = NOTE_Y
     canvas[top - 4:top + 12, 8:SCREEN_W - 8] //= 4
     hud.draw_text(canvas, text, (SCREEN_W - hud.text_width(text)) // 2, top, WHITE)
+
+
+def draw_how_to_play(canvas):
+    """The goal and the rules the original never explains (game/guide.py), over the picture."""
+    height = 12 + len(guide.HOW_TO_PLAY) * 11
+    canvas[4:4 + height, 4:SCREEN_W - 4] //= 5
+    for row, (line, kind) in enumerate(guide.HOW_TO_PLAY):
+        colour = WHITE if kind == "title" else GREY
+        hud.draw_text(canvas, line, 8, 10 + row * 11, colour)
 
 
 def draw_help(canvas):

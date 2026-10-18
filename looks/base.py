@@ -37,6 +37,8 @@ FLICKER = 0.06                # the match's light grows and shrinks by up to thi
 FLICKER_EVERY = 4             # ...changing every this many frames
 FLICKER_STEPS = (0.0, 0.7, -0.4, 1.0, -0.9, 0.3, -0.2, 0.8)  # a fixed wobble, so pictures repeat
 BLINK_EVERY, BLINK_FRAMES = 200, 6   # the eyes blink for 6 frames in every 200
+BANNER_FRAMES = 150           # how long a floor's name shows as you arrive on it
+INTRO_FRAMES = 540            # the story, at launch, before the title
 HAND_OFFSET = 10              # floor units from the eyes to the hand holding a lit match (left or right)
 HAND_DROP = 2                 # ...and how far below them
 DIM = 0.45                    # brightness of what's seen but not lit (looks may do it their own way)
@@ -66,6 +68,8 @@ class FloorLook(Look):
         self.scenes = {}       # floor -> its pictures, built once (looks/scenery.py)
         self.adapted = {}      # (name, frame) -> a cast picture through adapt()
         self.facing = Facing()
+        self.banner_floor, self.banner_frames = None, 0   # the floor whose name is showing, and for how long
+        self.intro_game, self.intro_done = None, False
         self.hand_side = 1     # which side the match is held: +1 right, -1 left (the way you last went)
         self.checker = np.add.outer(np.arange(VIEW_H), np.arange(VIEW_W)) % 2 == 0
 
@@ -73,13 +77,38 @@ class FloorLook(Look):
         screen = np.zeros((SCREEN_H, SCREEN_W, 3), np.uint8)
         screen[:] = self.background()
         if state.mode == "select":
-            self.draw_title(screen, state, frame_no)
+            self.banner_floor = None  # a new game shows its first floor's name
+            if self.in_intro(state, frame_no):
+                self.draw_intro(screen, frame_no)
+            else:
+                self.draw_title(screen, state, frame_no)
             return screen
+        self.intro_done = True
         screen[VIEW_Y:VIEW_Y + VIEW_H, VIEW_X:VIEW_X + VIEW_W] = self.view(state, frame_no)
         self.draw_status(screen, state, frame_no)
+        self.follow_floor(screen, state)
         if state.won:
             self.draw_win(screen, state, frame_no)
         return screen
+
+    def in_intro(self, state, frame_no):
+        """The story shows at launch until it's told, or the player picks a game (SELECT changes the game
+        number; RESET starts one); never after a game over."""
+        if self.intro_game is None:
+            self.intro_game = state.game
+        if frame_no >= INTRO_FRAMES or state.game != self.intro_game or not state.lives:
+            self.intro_done = True
+        return not self.intro_done
+
+    def follow_floor(self, screen, state):
+        """Arriving on a floor (by the stairs, or starting a game) shows its name for a moment."""
+        if state.floor != self.banner_floor:
+            self.banner_floor, self.banner_frames = state.floor, BANNER_FRAMES
+        if self.banner_frames and state.mode == "playing":
+            floors = self.pack.info.get("floors") or [f"FLOOR {number}" for number in range(1, 5)]
+            self.draw_banner(screen, floors[state.floor].upper(), f"FLOOR {state.floor + 1}",
+                             self.banner_frames / BANNER_FRAMES)
+            self.banner_frames -= 1
 
     # --- the view ------------------------------------------------------------------------------------
     def view(self, state, frame_no):
@@ -223,6 +252,12 @@ class FloorLook(Look):
 
     def draw_title(self, screen, state, frame_no):
         """Game select (and game over): the title screen."""
+
+    def draw_intro(self, screen, frame_no):
+        """At launch, before the title: the story (game/guide.py)."""
+
+    def draw_banner(self, screen, name, subtitle, left):
+        """A floor's name as you arrive; `left` runs from 1 (just arrived) down to 0."""
 
     def draw_win(self, screen, state, frame_no):
         """Drawn over the screen once the urn is out of the front door."""

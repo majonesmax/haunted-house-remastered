@@ -63,6 +63,11 @@ def place_monster(lab, monster, dx, dy):
 
 
 # --- the scenes: each leaves the lab on the frame to draw --------------------------------------------
+def intro(lab):
+    """At launch: the story (the look shows it until the game number changes or a game starts)."""
+    run(lab, 300)
+
+
 def title(lab):
     lab.hold(SELECT, frames=2)
     run(lab, 2)
@@ -170,7 +175,7 @@ def game_over(lab):
     run(lab, 300)
 
 
-SCENES = [("title", title), ("game 1", game_1_start), ("game 1, match lit", game_1_lit),
+SCENES = [("intro", intro), ("title", title), ("game 1", game_1_start), ("game 1, match lit", game_1_lit),
           ("game 1, monsters", game_1_monsters), ("floor 2", on_floor(2)), ("floor 3", on_floor(3)),
           ("floor 4", on_floor(4)), ("game 3, dark", game_3_dark),
           ("game 3, match lit", game_3_lit), ("game 3, stairs", game_3_stairs),
