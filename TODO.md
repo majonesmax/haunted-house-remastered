@@ -16,8 +16,9 @@ What's next for the remaster, roughly in order. Tick items off as they're done.
 
 - [x] Candles flicker; windows flash with the lightning; dust in the SNES match light
 - [x] Portraits whose eyes follow you
-- [x] An ambient soundscape under the music: rain and wind, creaks, a clock in the foyer, drips in the
-      conservatory, wind in the attic, distant thunder
+- [x] An ambient soundscape: distant thunder (and its lightning) under the music; where it's quiet - the
+      attic, the story once its music ends - rain, floorboards underfoot, and the house's noises when you
+      stand still
 - [x] Livelier monsters: the bat's three-frame flap; tarantulas' legs move only while they walk
 
 ## 3. A proper ending

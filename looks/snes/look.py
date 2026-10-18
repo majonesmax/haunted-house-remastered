@@ -61,6 +61,9 @@ class SnesLook(NesLook):
         out[..., :3] = snes_rgb(out[..., :3])
         return out
 
+    def distant_flash(self, screen, level):
+        return snes_rgb(FloorLook.distant_flash(self, screen, level))  # not the NES's palette
+
     def dimmed(self, rgb):
         return snes_rgb(np.clip(rgb * DIM, 0, 255).astype(np.uint8))
 

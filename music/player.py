@@ -1,13 +1,15 @@
 """The soundtrack, following the game: which piece plays when, mixed under the 2600's own sound.
 
 The pack's songs (music/chiptune.py renders them, once) are named by the moment they're for:
-    title       game select              floor1-4    walking a floor
+    story       the story at launch      title       game select
+    floor1-4    walking a floor
     tension     a monster in your room   dying       a life lost (once)
     game_over   the last life lost (once) win        the urn out of the front door (once)
 
 The game loop calls follow(state) each frame; the sound card's callback calls mixer(samples)
 (game/emulator.py, AudioOut(mixer=...)), which adds the music to the game's sound. Each looping piece
-keeps its place, so a floor's theme carries on where it was after a monster has gone. A pack without
+keeps its place, so a floor's theme carries on where it was after a monster has gone. A moment with no song
+is quiet (the attic, in the packs here): the house's ambience fills it (music/ambience.py). A pack without
 music.json plays no music.
 """
 
@@ -23,8 +25,10 @@ CALM_FRAMES = 120   # the tension music keeps on this long after the last monste
 KNEE, TOP = 28000.0, 32767.0  # mixing: above the knee, peaks are rounded off instead of clipping
 
 
-def moment(state):
-    """Which piece belongs to this moment of the game."""
+def moment(state, intro=False):
+    """Which piece belongs to this moment of the game (intro: the story is showing)."""
+    if intro:
+        return "story"
     if state.mode == "select":
         return "game_over" if state.lives == 0 else "title"
     if state.won:
@@ -56,6 +60,10 @@ class Piece:
             self.position += take
         return out
 
+    @property
+    def finished(self):
+        return not self.loop and self.position >= len(self.samples)
+
 
 class MusicPlayer:
     """A pack's songs, played on a look's sound chip ("chiptune" for the NES, "orchestra" for the SNES).
@@ -79,7 +87,7 @@ class MusicPlayer:
 
     def render_all(self):
         """In the background: every song, those heard first first."""
-        first = [name for name in ("title", "floor1") if name in self.songs]
+        first = [name for name in ("story", "title", "floor1") if name in self.songs]
         rest = [name for name in self.songs if name not in first]
         for name in first + rest:
             self.rendered[name] = self.synth.render(self.songs[name])
@@ -88,9 +96,15 @@ class MusicPlayer:
     def ready(self):
         return len(self.rendered) == len(self.songs)
 
-    def follow(self, state):
+    @property
+    def silent(self):
+        """Is no music playing: switched off, no song for this moment, or a jingle that's over?"""
+        piece = self.current
+        return not self.on or piece is None or piece.finished
+
+    def follow(self, state, intro=False):
         """Called once a frame: switch pieces when the moment changes."""
-        wanted = moment(state)
+        wanted = moment(state, intro)
         if self.playing == "tension" and wanted.startswith("floor"):
             self.calm_for += 1
             if self.calm_for < CALM_FRAMES:

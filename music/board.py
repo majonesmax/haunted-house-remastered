@@ -2,7 +2,7 @@
 soundtrack under either. The remastered sound is the effects and the house's ambience (music/ambience.py).
 
     board = SoundBoard(MusicPlayer(songs))
-    board.follow(state)          # once a frame: the music follows the game; events trigger effects
+    board.follow(state, intro, thunder)   # once a frame: the music follows the game; events trigger effects
     AudioOut(rate, mixer=board.mixer)   # the sound card's callback asks for the mix
 
 With the remastered effects on, the game's own sound is left out (its buzzes say the same things less
@@ -31,12 +31,20 @@ class SoundBoard:
         self.voices = []        # [samples, position] of each effect playing
         self.lock = threading.Lock()
 
-    def follow(self, state):
-        """Once a frame: the music follows the game, and what just happened is heard."""
-        self.music.follow(state)
-        self.ambience.follow(state)
-        for name in self.watcher.update(state):  # always watched, so switching back finds it up to date
-            if self.remastered:
+    def follow(self, state, intro=False, thunder=False):
+        """Once a frame: the music follows the game (and the story, while it shows), what just happened is
+        heard, and the storm's thunder when it arrives (shared/storm.py)."""
+        self.music.follow(state, intro)
+        self.ambience.follow(state, intro, quiet=self.music.silent)
+        events = self.watcher.update(state)  # always watched, so switching back finds it up to date
+        if not self.remastered:
+            return
+        if thunder:
+            self.ambience.thunder()
+        for name in events:
+            if name == "footstep" and self.ambience.quiet:
+                self.ambience.step()   # where it's quiet, the floorboards are heard
+            else:
                 self.play(name)
 
     def play(self, name):
@@ -49,6 +57,7 @@ class SoundBoard:
         self.remastered = not self.remastered
         with self.lock:
             self.voices = []
+        self.ambience.hush()
         return self.remastered
 
     def mixer(self, game_sound):

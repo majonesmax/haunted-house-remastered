@@ -1,16 +1,15 @@
-"""The house's own sounds, under the music: a quiet bed that loops for each place.
+"""The house's ambience: what you hear when the music stops, and the storm under everything.
 
-    outside   the title: rain and wind, thunder far off
-    floor1    the foyer: rain at the windows, a clock ticking, a floorboard now and then
-    floor2    the dining hall: rain, the house settling, a far roll of thunder
-    floor3    the conservatory: rain on the glass, drips into puddles
-    floor4    the attic: wind under the roof, rain on the slates, a creaking beam
+    where it's quiet   (no song for the moment - the attic in the packs here - the story once its music has
+                       played, or the music switched off): rain, wind, a clock in the foyer, drips in the
+                       conservatory; floorboards under your feet as you walk; and stand still a while and the
+                       house makes its noises - a creak, a moan, knocking, a whisper, a far door, a gust
+    everywhere         distant thunder, a moment after the storm's lightning (shared/storm.py)
 
-Everything is made from shaped noise and a few plinks and knocks, in stereo (each side its own noise, so the
-rain is wide). Noise is shaped in the frequency domain, so each bed loops without a seam. The remastered
-sound (E) brings the ambience with it; the 2600's own sound plays alone.
+Rain under music sounds like static, so the beds fade out whenever a song plays. The remastered sound (E)
+brings the ambience with it; the 2600's own sound plays alone. music/house.py makes the sounds.
 
-Usage: python -m music.ambience     -> shots/ambience/<name>.wav, to listen to
+Usage: python -m music.ambience     -> shots/ambience/: each place's bed, the thunder, steps and noises
 """
 
 import os
@@ -20,203 +19,181 @@ import wave
 import numpy as np
 
 from music.chiptune import RATE
+from music.house import (NOISES, at, drip, floorboard, panned, rain, seconds, thunder, ticking, wind)
 
-LOOP_SECONDS = 16       # each bed's length; it loops
-LEVEL = 700             # each bed's average loudness: well under the music (12000) and the effects (14000)
-PEAK = 4000             # loud moments (a creak, thunder) are rounded off towards this
-FADE_SECONDS = 1.0      # moving to another place: the old bed fades out as the new one fades in
-
-
-def seconds(count):
-    return int(count * RATE)
-
-
-# --- the raw sounds -------------------------------------------------------------------------------------
-def shaped_noise(low_hz, high_hz, seed, length=None):
-    """Stereo noise with only the frequencies from low_hz to high_hz, looping seamlessly; peak about 1."""
-    length = length or seconds(LOOP_SECONDS)
-    rng = np.random.default_rng(seed)
-    frequencies = np.fft.rfftfreq(length, 1 / RATE)
-    keep = (frequencies >= low_hz) & (frequencies <= high_hz)
-    sides = []
-    for _side in range(2):
-        spectrum = rng.normal(size=len(frequencies)) + 1j * rng.normal(size=len(frequencies))
-        sides.append(np.fft.irfft(spectrum * keep, length))
-    noise = np.stack(sides, axis=1)
-    return noise / np.abs(noise).max()
+BED_LEVEL = 1300        # a bed's average loudness (the music is 12000, but they're never heard together)
+BED_PEAK = 6000         # a bed's loudest moments are rounded off towards this
+THUNDER_PEAK = 9000
+STEP_PEAK = 5000
+NOISE_PEAK = 4000
+FADE_SECONDS = 1.5      # the beds fade in as the music stops (and out as it starts), and between places
+IDLE_FRAMES = 180       # stand still this long and the house starts to make its noises...
+NOISE_GAP = (4 * 60, 11 * 60)   # ...one every this many frames
+STEP_EVERY = 2          # a floorboard for every second footstep (music/events.py's are quick)
 
 
-def swell(cycles, depth, phase=0.0):
-    """A slow rise and fall in loudness, a whole number of times a loop (so it loops too)."""
-    t = np.linspace(0, 1, seconds(LOOP_SECONDS), endpoint=False)
-    return (1 - depth + depth * (0.5 + 0.5 * np.sin(2 * np.pi * cycles * t + phase)))[:, None]
-
-
-def decay(length, time_constant):
-    return np.exp(-np.arange(length) / RATE / time_constant)
-
-
-def at(track, start, sound, pan=0.0):
-    """Add a mono sound into a stereo track at `start` seconds, panned from -1 (left) to 1 (right),
-    wrapping round the loop's end."""
-    begin = seconds(start) % len(track)
-    positions = (begin + np.arange(len(sound))) % len(track)
-    track[positions, 0] += sound * (1 - pan) / 2
-    track[positions, 1] += sound * (1 + pan) / 2
-
-
-def drip(pitch_hz):
-    """A drop into a puddle: a short plink that bends up."""
-    length = seconds(0.12)
-    hz = pitch_hz * (1 + 0.6 * np.linspace(0, 1, length))
-    return np.sin(2 * np.pi * np.cumsum(hz) / RATE) * decay(length, 0.025)
-
-
-def tick(pitch_hz):
-    """A clock's tick: a tiny bright knock."""
-    length = seconds(0.03)
-    return np.sin(2 * np.pi * pitch_hz * np.arange(length) / RATE) * decay(length, 0.004)
-
-
-def creak(seed, length_seconds=0.7, low_hz=90):
-    """Old wood giving: a buzz of quick, uneven clicks whose pitch wanders."""
-    rng = np.random.default_rng(seed)
-    length = seconds(length_seconds)
-    wander = np.interp(np.arange(length), np.linspace(0, length, 6), rng.uniform(0.8, 1.5, 6))
-    phase = np.cumsum(low_hz * wander) / RATE
-    clicks = (np.sin(2 * np.pi * phase) > 0.92) * 1.0
-    body = np.convolve(clicks, decay(seconds(0.004), 0.001), mode="same")
-    envelope = np.sin(np.pi * np.linspace(0, 1, length)) ** 2
-    return body * envelope / max(1e-9, np.abs(body).max())
-
-
-def rumble(seed, length_seconds=5.0):
-    """Thunder a long way off: a low roll that swells and dies away."""
-    length = seconds(length_seconds)
-    noise = shaped_noise(25, 160, seed, length)[:, 0]
-    envelope = np.minimum(np.linspace(0, 6, length), 1) * decay(length, 1.2)
-    return noise * envelope
-
-
-# --- the places -----------------------------------------------------------------------------------------
-def rain(loudness, seed):
-    return shaped_noise(900, 7000, seed) * swell(3, 0.25) * loudness
-
-
-def wind(loudness, seed):
-    return shaped_noise(120, 500, seed) * swell(2, 0.8, phase=seed) * loudness
-
-
+# --- the beds -------------------------------------------------------------------------------------------
 def outside():
-    track = rain(0.5, 1) + wind(0.5, 2)
-    at(track, 9.0, rumble(3), pan=-0.4)
-    return track
+    return rain(1) + 0.6 * wind(2)
 
 
 def foyer():
-    track = rain(0.25, 4)
-    for second in range(LOOP_SECONDS):
-        at(track, second, tick(2600 if second % 2 else 2000) * 0.5, pan=0.5)
-    at(track, 6.5, creak(5) * 0.4, pan=-0.6)
+    track = rain(3)
+    ticking(track, pan=0.5)
     return track
 
 
 def dining_hall():
-    track = rain(0.3, 6)
-    at(track, 3.0, creak(7, 0.5, 70) * 0.35, pan=0.6)
-    at(track, 10.0, rumble(8) * 0.8, pan=0.3)
-    return track
+    return rain(4)
 
 
 def conservatory():
-    track = rain(0.55, 9)
-    rng = np.random.default_rng(10)
-    for _drop in range(14):
-        at(track, rng.uniform(0, LOOP_SECONDS), drip(rng.uniform(900, 1600)) * rng.uniform(0.3, 0.6),
-           pan=rng.uniform(-0.8, 0.8))
+    track = rain(5, drops_a_second=140)
+    rng = np.random.default_rng(6)
+    for seed in range(14):
+        at(track, rng.uniform(0, 16), panned(drip(seed) * rng.uniform(0.3, 0.6), rng.uniform(-0.8, 0.8)))
     return track
 
 
 def attic():
-    track = wind(0.8, 11) + rain(0.3, 12)
-    at(track, 5.0, creak(13, 1.2, 55) * 0.5, pan=-0.3)
-    at(track, 12.5, creak(14, 0.8, 65) * 0.4, pan=0.5)
-    return track
+    return 0.6 * rain(7, drops_a_second=60) + wind(8)
 
 
 PLACES = {"outside": outside, "floor1": foyer, "floor2": dining_hall, "floor3": conservatory,
           "floor4": attic}
 
 
-def place_for(state):
-    """Which bed belongs to this moment: outside on the title, else the floor you're on."""
-    if state.mode == "select":
-        return "outside"
-    return f"floor{state.floor + 1}"
-
-
-def to_pcm(track):
-    """To int16 at LEVEL on average, peaks rounded off below PEAK."""
+def bed_pcm(track):
+    """To int16 at BED_LEVEL on average, peaks rounded off below BED_PEAK."""
     average = np.sqrt((track ** 2).mean())
-    scaled = track / max(1e-9, average) * LEVEL
-    return (PEAK * np.tanh(scaled / PEAK)).astype(np.int16)
+    scaled = track / max(1e-9, average) * BED_LEVEL
+    return (BED_PEAK * np.tanh(scaled / BED_PEAK)).astype(np.int16)
 
 
-def render_all():
-    return {name: to_pcm(make()) for name, make in PLACES.items()}
+def one_off_pcm(sound, peak, pan=0.0):
+    """A one-off sound (mono or stereo) to int16 stereo with its loudest moment at `peak`."""
+    stereo = sound if sound.ndim == 2 else panned(sound, pan)
+    return (stereo / max(1e-9, np.abs(stereo).max()) * peak).astype(np.int16)
 
 
 # --- playing it -----------------------------------------------------------------------------------------
 class Ambience:
-    """The beds, rendered in the background, each keeping its place in its loop; moving to another place
-    crossfades."""
+    """The beds and one-offs, made in the background; each bed keeps its place in its loop."""
 
     def __init__(self):
-        self.beds = {}           # place -> its samples, as the background renders them
-        self.positions = {}      # place -> where its loop is
-        self.place, self.leaving = None, None
-        self.fade = 0            # samples left of the crossfade
+        self.beds, self.positions = {}, {}
+        self.thunders, self.steps, self.noises = [], [], []
+        self.place, self.leaving, self.crossfade = None, None, 0
+        self.quiet, self.gain = False, 0.0
+        self.voices = []         # [samples, position] of each one-off playing
+        self.idle, self.last_player, self.steps_taken = 0, None, 0
+        self.rng = np.random.default_rng()
+        self.until_noise = self.rng.integers(*NOISE_GAP)
         self.lock = threading.Lock()
-        threading.Thread(target=self.render_all, daemon=True).start()
+        threading.Thread(target=self.make_all, daemon=True).start()
 
-    def render_all(self):
+    def make_all(self):
+        """A second or two of work, done once in the background."""
+        self.thunders = [one_off_pcm(thunder(seed), THUNDER_PEAK) for seed in range(4)]
+        self.steps = [one_off_pcm(floorboard(seed), STEP_PEAK) for seed in range(8)]
+        pans = iter(np.random.default_rng(1).uniform(-0.8, 0.8, 2 * len(NOISES)))
+        self.noises = [one_off_pcm(make(seed), NOISE_PEAK, next(pans))
+                       for make in NOISES.values() for seed in (1, 2)]
         for name, make in PLACES.items():
-            self.beds[name] = to_pcm(make())   # a fraction of a second each
+            self.beds[name] = bed_pcm(make())
 
-    def follow(self, state):
-        place = place_for(state)
+    # --- following the game ---
+    def follow(self, state, intro, quiet):
+        """Once a frame. quiet: no music is playing."""
+        self.quiet = quiet
+        place = "outside" if intro or state.mode == "select" else f"floor{state.floor + 1}"
         if place != self.place:
             with self.lock:
-                self.place, self.leaving = place, self.place
-                self.fade = seconds(FADE_SECONDS)
+                self.place, self.leaving, self.crossfade = place, self.place, seconds(FADE_SECONDS)
+        self.listen_for_stillness(state, intro)
 
-    def render(self, count):
-        """The next `count` stereo samples."""
+    def listen_for_stillness(self, state, intro):
+        """Stand still where it's quiet, and every few seconds the house makes a noise."""
+        still = intro or (state.mode == "playing" and state.player == self.last_player)
+        self.last_player = state.player
+        if not still:
+            self.idle, self.until_noise = 0, self.rng.integers(*NOISE_GAP)
+            return
+        self.idle += 1
+        if self.quiet and self.idle >= IDLE_FRAMES:
+            self.until_noise -= 1
+            if self.until_noise <= 0 and self.noises:
+                self.play(self.noises[self.rng.integers(len(self.noises))])
+                self.until_noise = self.rng.integers(*NOISE_GAP)
+
+    def thunder(self):
+        if self.thunders:
+            self.play(self.thunders[self.rng.integers(len(self.thunders))])
+
+    def step(self):
+        """A footstep where it's quiet: an old floorboard."""
+        self.steps_taken += 1
+        if self.steps and self.steps_taken % STEP_EVERY == 1:
+            self.play(self.steps[self.rng.integers(len(self.steps))])
+
+    def play(self, samples):
         with self.lock:
-            out = self.take(self.place, count).astype(np.float32)
-            if self.fade:
-                fade_in = np.clip(1 - (self.fade - np.arange(count)) / seconds(FADE_SECONDS), 0, 1)[:, None]
-                leaving = self.take(self.leaving, count).astype(np.float32)
-                out = out * fade_in + leaving * (1 - fade_in)
-                self.fade = max(0, self.fade - count)
-        return out.astype(np.int16)
+            self.voices.append([samples, 0])
+
+    def hush(self):
+        """Stop the one-offs (the player chose the 2600's sound)."""
+        with self.lock:
+            self.voices = []
+
+    # --- the sound card's callback ---
+    def render(self, count):
+        """The next `count` stereo samples: the bed (as loud as the quiet allows) and the one-offs."""
+        with self.lock:
+            out = self.bed(count) * self.fade_gain(count)[:, None]
+            for voice in self.voices:
+                samples, position = voice
+                take = min(count, len(samples) - position)
+                out[:take] += samples[position:position + take]
+                voice[1] = position + take
+            self.voices = [voice for voice in self.voices if voice[1] < len(voice[0])]
+        return np.clip(out, -32767, 32767).astype(np.int16)
+
+    def fade_gain(self, count):
+        """The beds' loudness through these samples, moving towards full when quiet, none when not."""
+        target = 1.0 if self.quiet else 0.0
+        most = count / seconds(FADE_SECONDS)
+        start, self.gain = self.gain, self.gain + float(np.clip(target - self.gain, -most, most))
+        return np.linspace(start, self.gain, count)
+
+    def bed(self, count):
+        out = self.take(self.place, count).astype(np.float32)
+        if self.crossfade:
+            done = seconds(FADE_SECONDS) - self.crossfade + np.arange(count)
+            fade_in = np.clip(done / seconds(FADE_SECONDS), 0, 1)[:, None]
+            out = out * fade_in + self.take(self.leaving, count) * (1 - fade_in)
+            self.crossfade = max(0, self.crossfade - count)
+        return out
 
     def take(self, place, count):
-        """`count` samples of a place's bed from where it left off; silence if it isn't ready."""
+        """`count` samples of a place's bed from where it left off; silence if it isn't made yet."""
         bed = self.beds.get(place)
         if bed is None:
             return np.zeros((count, 2), np.int16)
         start = self.positions.get(place, 0)
-        indices = (start + np.arange(count)) % len(bed)
         self.positions[place] = (start + count) % len(bed)
-        return bed[indices]
+        return bed[(start + np.arange(count)) % len(bed)]
 
 
 def main():
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     out = os.path.join(root, "shots", "ambience")
     os.makedirs(out, exist_ok=True)
-    for name, pcm in render_all().items():
+    sounds = {name: bed_pcm(make()) for name, make in PLACES.items()}
+    sounds.update({f"thunder_{seed}": one_off_pcm(thunder(seed), THUNDER_PEAK) for seed in range(4)})
+    steps = [one_off_pcm(floorboard(seed), STEP_PEAK) for seed in range(8)]
+    sounds["floorboards"] = np.concatenate(steps)
+    sounds.update({f"noise_{name}": one_off_pcm(make(1), NOISE_PEAK) for name, make in NOISES.items()})
+    for name, pcm in sounds.items():
         path = os.path.join(out, f"{name}.wav")
         with wave.open(path, "wb") as out_file:
             out_file.setnchannels(2)

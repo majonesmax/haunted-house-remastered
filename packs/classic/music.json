@@ -1,6 +1,11 @@
 {
-  "_about": "The classic pack's soundtrack: original gothic chiptune, rendered by music/chiptune.py. A song per moment: title, floor1-4, tension (a monster in your room), dying, game_over, win. Melody tokens are eighth notes (8 a bar); see music/chiptune.py.",
+  "_about": "The classic pack's soundtrack: original gothic chiptune, rendered by music/chiptune.py. A song per moment: story (once, as the story shows at launch), title, floor1-3 (the attic has none: it's the quiet floor, rain and creaks), tension (a monster in your room), dying, game_over, win. Melody tokens are eighth notes (8 a bar); see music/chiptune.py.",
   "songs": {
+    "story": {
+      "bpm": 60, "style": "organ", "loop": false, "drums": "",
+      "chords": "Dm Bb Gm A Dm",
+      "melody": "A4 - - - D5 - - - | F5 - - - E5 - D5 - | D5 - - - Bb4 - G4 - | A4 - - - C#5 - - - | D5 - - - - - - -"
+    },
     "title": {
       "bpm": 76, "style": "organ", "loop": true, "drums": "",
       "chords": "Dm Bb Gm A Dm F Gm A",
@@ -20,11 +25,6 @@
       "bpm": 108, "style": "creep", "loop": true, "drums": "k.......k...h...",
       "chords": "Em C Am B Em C D B G D Em B C Am B Em",
       "melody": "B4 - - - E5 - G5 - | E5 - - - . . C5 - | A4 - C5 - E5 - D5 C5 | B4 - - - D#5 - F#5 - | G5 - - - F#5 - E5 - | E5 - G5 - C6 - - - | A5 - - - F#5 - D5 - | D#5 - - - B4 - . . | D5 - G5 - B5 - - - | A5 - F#5 - D5 - - - | E5 - G5 - B5 - E6 - | D#6 - - - B5 - F#5 - | E5 - - - G5 - E5 - | C5 - E5 - A5 - - - | F#5 - - - D#5 - B4 - | E5 - - - . . . ."
-    },
-    "floor4": {
-      "bpm": 88, "style": "creep", "loop": true, "drums": "k.......k.......",
-      "chords": "Cm Cm Ab G Cm Fm G G Ab Fm Cm G Fm Ab G Cm",
-      "melody": ". . G4 - - - Eb5 - | D5 - - - C5 - . . | . . Ab4 - - - C5 - | B4 - - - D5 - F5 - | Eb5 - - - D5 - C5 - | Ab4 - - - F4 - C5 - | B4 - - - G4 - - - | . . D5 - F5 - Ab5 - | G5 - - - Eb5 - C5 - | F5 - - - Ab5 - F5 - | Eb5 - - - C5 - G4 - | B4 - - - D5 - . . | C5 - Ab4 - F4 - Ab4 - | Eb5 - - - C5 - Ab4 - | D5 - - - B4 - G4 - | C5 - - - . . . ."
     },
     "tension": {
       "bpm": 150, "style": "tremolo", "loop": true, "drums": "k..k....k..k....",

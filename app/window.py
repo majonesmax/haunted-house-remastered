@@ -1,9 +1,11 @@
 """The game window: runs the emulator, asks the look for a picture, and shows it.
 
 One frame (GameWindow.run):
-    1. input     keys -> the joystick and the console's switches, or window commands (app/controls.py)
+    1. input     keys -> the joystick and the console's switches, or window commands (app/controls.py); at
+                 launch, the story shows until any key is pressed
     2. the game  one emulator frame (unless paused), and its sound to the speakers
-    3. picture   a GameState snapshot of the RAM -> the look draws it, and the soundtrack follows it
+    3. picture   a GameState snapshot of the RAM -> the look draws it (with the story, or the storm's distant
+                 lightning: shared/storm.py), and the soundtrack follows it
     4. show      the current view: the remaster beside the 2600 original, the remaster alone, or the
                  original alone; with the help overlay (H) on top if it's open
     5. pace      at the game's 60 frames a second
@@ -26,8 +28,9 @@ from music.player import MusicPlayer
 from game import emulator as E
 from game import paths
 from game.state import Game
-from looks.base import SCREEN_H, SCREEN_W
+from looks.base import SCREEN_H, SCREEN_W, Extras
 from shared import hud
+from shared.storm import Storm
 
 JOYSTICK = {pygame.K_UP: E.JOY_UP, pygame.K_DOWN: E.JOY_DOWN, pygame.K_LEFT: E.JOY_LEFT,
             pygame.K_RIGHT: E.JOY_RIGHT, pygame.K_SPACE: E.JOY_B,
@@ -70,6 +73,9 @@ class GameWindow:
         self.lightning = True          # the left difficulty switch at B, the console's default
         self.switch_held = 0
         self.frame_no = 0
+        self.intro = True              # the story, at launch, until a key is pressed
+        self.keys_held_off = False     # after the story: the key that ended it isn't passed to the game
+        self.storm = Storm()
         self.picture = None
         self.screen = self.set_mode()
         threading.Thread(target=self.prepare_looks, daemon=True).start()
@@ -87,8 +93,9 @@ class GameWindow:
             if not self.paused:
                 self.step_game()
                 state = self.game.state(self.core.ram)
-                self.sound.follow(state)
-                self.picture = self.look.draw(state, self.frame_no)
+                flash, thunder = self.weather(state)
+                self.sound.follow(state, self.intro, thunder)
+                self.picture = self.look.draw(state, self.frame_no, Extras(self.intro, flash))
                 self.frame_no += 1
             self.show()
             self.note_frames = max(0, self.note_frames - 1)
@@ -105,11 +112,24 @@ class GameWindow:
                     return False
                 if event.key in KEYS:
                     getattr(self, KEYS[event.key])()
+                elif self.intro:
+                    self.intro, self.keys_held_off = False, True
         return True
+
+    def weather(self, state):
+        """(the distant lightning's flash, 0-1; does its thunder arrive now?) - over the story and in play,
+        not on the title (it has its own), and only while the lightning switch is on (D)."""
+        if not self.lightning or (state.mode == "select" and not self.intro):
+            return 0.0, False
+        return self.storm.flash(self.frame_no), self.storm.thunder(self.frame_no)
 
     def step_game(self):
         pressed = pygame.key.get_pressed()
         held = {button for key, button in JOYSTICK.items() if pressed[key]}
+        if self.keys_held_off and not held:
+            self.keys_held_off = False
+        if self.intro or self.keys_held_off:
+            held = set()   # the story isn't the game's: its keys don't reach it
         if self.switch_held:
             held.add(LEFT_DIFFICULTY_B if self.lightning else LEFT_DIFFICULTY_A)
             self.switch_held -= 1

@@ -9,7 +9,7 @@ packs/classic.
 import numpy as np
 
 from game import guide
-from looks.base import INTRO_FRAMES, FloorLook
+from looks.base import FloorLook
 from looks.layout import SCREEN_H, SCREEN_W, VIEW_H, VIEW_W, VIEW_X, VIEW_Y
 from shared import hud
 from shared import palettes as PAL
@@ -44,6 +44,7 @@ LOGO_Y, GAME_Y, HINT_Y = 22, 46, 226
 RULES_X, RULES_Y, RULE_SPACING = 12, 62, 10     # the game's rules, down the left (clear of the moon)
 INTRO_Y, INTRO_SPACING, INTRO_EYES_Y = 48, 14, 176
 INTRO_LINE_FRAMES = 45                          # the story appears a line at a time
+NES_SKY_FLASH = np.array([0, 36, 150])        # distant lightning: towards the deep blue ($01/$02)
 BANNER_TOP, BANNER_H = 10, 30                   # a floor's name, near the top of the view
 TITLE_LIGHTNING_EVERY, TITLE_LIGHTNING_FRAMES = 330, 4
 TITLE_LOOKS = ("centre", "left", "centre", "right", "up", "centre")
@@ -94,6 +95,12 @@ class NesLook(FloorLook):
 
     def background(self):
         return BLACK
+
+    def distant_flash(self, screen, level):
+        """Lightened towards the palette's deep blue, then back into the palette: black steps through the
+        blues as it fades (a grey-blue would snap to grey)."""
+        lightened = np.clip(screen + NES_SKY_FLASH * level, 0, 255).astype(np.uint8)
+        return self.to_nes(lightened)
 
     # --- the view: the urn shimmers, and dying turns it red ------------------------------------------
     def picture(self, name, frame_no):
@@ -212,8 +219,8 @@ class NesLook(FloorLook):
         eyes = self.picture("eyes_blink" if frame_no % 120 < 6 else "eyes_centre", frame_no)
         if eyes is not None:
             blit(screen, eyes, (SCREEN_W - eyes.shape[1]) // 2, INTRO_EYES_Y)
-        if frame_no > INTRO_FRAMES // 3:
-            hint = "ENTER: PLAY"
+        if shown >= len(guide.STORY):
+            hint = "PRESS ANY KEY"
             hud.draw_text(screen, hint, centred(hint), HINT_Y, DIM_GREY)
 
     def draw_banner(self, screen, name, subtitle, left):

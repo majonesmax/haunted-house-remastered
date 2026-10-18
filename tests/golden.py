@@ -22,6 +22,7 @@ import looks  # noqa: E402
 import preview  # noqa: E402
 from game.state import Game  # noqa: E402
 from lab import SHOTS, Lab  # noqa: E402
+from looks.base import NO_EXTRAS  # noqa: E402
 
 GOLDEN = os.path.join(HERE, "tests", "golden.json")
 DIFFERENT = os.path.join(SHOTS, "golden")
@@ -35,11 +36,12 @@ def fingerprints():
     for platform in sorted(looks.LOOKS):
         look = looks.make(platform, game.rom)
         for label, scene in preview.SCENES:
-            start = lab.save()
-            scene(lab)
-            picture = look.draw(game.state(lab.ram), lab.frame_count)
+            start, start_frame = lab.save(), lab.frame_count  # each scene from the same moment
+            extras = scene(lab) or NO_EXTRAS
+            picture = look.draw(game.state(lab.ram), lab.frame_count, extras)
             found[f"{platform}/{label}"] = (hashlib.sha256(picture.tobytes()).hexdigest(), picture)
             lab.load(start)
+            lab.frame_count = start_frame
     return found
 
 

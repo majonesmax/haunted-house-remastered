@@ -17,7 +17,7 @@ adapting its pictures to its own rules (adapt()).
 """
 
 from abc import ABC, abstractmethod
-from collections import deque
+from collections import deque, namedtuple
 
 import numpy as np
 
@@ -40,10 +40,16 @@ FLICKER_EVERY = 4             # ...changing every this many frames
 FLICKER_STEPS = (0.0, 0.7, -0.4, 1.0, -0.9, 0.3, -0.2, 0.8)  # a fixed wobble, so pictures repeat
 BLINK_EVERY, BLINK_FRAMES = 200, 6   # the eyes blink for 6 frames in every 200
 BANNER_FRAMES = 150           # how long a floor's name shows as you arrive on it
-INTRO_FRAMES = 540            # the story, at launch, before the title
+SKY_FLASH = np.array([70, 80, 120])   # distant lightning at its brightest lightens the screen by this
 HAND_OFFSET = 10              # floor units from the eyes to the hand holding a lit match (left or right)
 HAND_DROP = 2                 # ...and how far below them
 DIM = 0.45                    # brightness of what's seen but not lit (looks may do it their own way)
+
+
+Extras = namedtuple("Extras", "intro flash", defaults=(False, 0.0))
+Extras.__doc__ = """What the app adds to the game: the story showing at launch (intro, until a key is
+pressed), and distant lightning (flash, 0-1: shared/storm.py)."""
+NO_EXTRAS = Extras()
 
 
 class Look(ABC):
@@ -58,8 +64,9 @@ class Look(ABC):
     synth = "chiptune"   # the console's sound chip: plays any pack's songs (music/)
 
     @abstractmethod
-    def draw(self, state, frame_no):
-        """The screen for this frame: a (240, 256, 3) uint8 RGB array. frame_no counts up once a frame."""
+    def draw(self, state, frame_no, extras=NO_EXTRAS):
+        """The screen for this frame: a (240, 256, 3) uint8 RGB array. frame_no counts up once a frame;
+        extras: the story and the storm (Extras)."""
 
 
 class FloorLook(Look):
@@ -72,36 +79,27 @@ class FloorLook(Look):
         self.decor_patches = {}  # (name, frame) -> a living decoration's picture in each layer
         self.facing = Facing()
         self.banner_floor, self.banner_frames = None, 0   # the floor whose name is showing, and for how long
-        self.intro_game, self.intro_done = None, False
         self.hand_side = 1     # which side the match is held: +1 right, -1 left (the way you last went)
         self.checker = np.add.outer(np.arange(VIEW_H), np.arange(VIEW_W)) % 2 == 0
 
-    def draw(self, state, frame_no):
+    def draw(self, state, frame_no, extras=NO_EXTRAS):
         screen = np.zeros((SCREEN_H, SCREEN_W, 3), np.uint8)
         screen[:] = self.background()
-        if state.mode == "select":
+        if extras.intro:
+            self.draw_intro(screen, frame_no)
+        elif state.mode == "select":
             self.banner_floor = None  # a new game shows its first floor's name
-            if self.in_intro(state, frame_no):
-                self.draw_intro(screen, frame_no)
-            else:
-                self.draw_title(screen, state, frame_no)
+            self.draw_title(screen, state, frame_no)  # the title has its own lightning
             return screen
-        self.intro_done = True
-        screen[VIEW_Y:VIEW_Y + VIEW_H, VIEW_X:VIEW_X + VIEW_W] = self.view(state, frame_no)
-        self.draw_status(screen, state, frame_no)
-        self.follow_floor(screen, state)
-        if state.won:
-            self.draw_win(screen, state, frame_no)
+        else:
+            screen[VIEW_Y:VIEW_Y + VIEW_H, VIEW_X:VIEW_X + VIEW_W] = self.view(state, frame_no)
+            self.draw_status(screen, state, frame_no)
+            self.follow_floor(screen, state)
+            if state.won:
+                self.draw_win(screen, state, frame_no)
+        if extras.flash:
+            screen = self.distant_flash(screen, extras.flash)
         return screen
-
-    def in_intro(self, state, frame_no):
-        """The story shows at launch until it's told, or the player picks a game (SELECT changes the game
-        number; RESET starts one); never after a game over."""
-        if self.intro_game is None:
-            self.intro_game = state.game
-        if frame_no >= INTRO_FRAMES or state.game != self.intro_game or not state.lives:
-            self.intro_done = True
-        return not self.intro_done
 
     def follow_floor(self, screen, state):
         """Arriving on a floor (by the stairs, or starting a game) shows its name for a moment."""
@@ -288,6 +286,10 @@ class FloorLook(Look):
 
     def draw_title(self, screen, state, frame_no):
         """Game select (and game over): the title screen."""
+
+    def distant_flash(self, screen, level):
+        """The whole screen lightened by distant lightning (level 0-1), evenly, so it shows nothing."""
+        return np.clip(screen + SKY_FLASH * level, 0, 255).astype(np.uint8)
 
     def draw_intro(self, screen, frame_no):
         """At launch, before the title: the story (game/guide.py)."""

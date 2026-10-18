@@ -22,6 +22,7 @@ sys.path.insert(0, HERE)
 import looks  # noqa: E402
 from game import ram_map as M  # noqa: E402
 from game.state import Game  # noqa: E402
+from looks.base import NO_EXTRAS, Extras  # noqa: E402
 from shared import hud  # noqa: E402
 
 ORIGINAL_W, HEIGHT = 320, 240
@@ -62,10 +63,11 @@ def place_monster(lab, monster, dx, dy):
     lab.poke(M.MONSTER_Y + monster, lab.peek(M.POS_Y) + dy)
 
 
-# --- the scenes: each leaves the lab on the frame to draw --------------------------------------------
+# --- the scenes: each leaves the lab on the frame to draw, and returns what the app adds, if anything -----
 def intro(lab):
-    """At launch: the story (the look shows it until the game number changes or a game starts)."""
-    run(lab, 300)
+    """At launch: the story (the app shows it until a key is pressed), all of it told."""
+    run(lab, 400)
+    return Extras(intro=True)
 
 
 def title(lab):
@@ -108,6 +110,12 @@ def on_floor(number):
 def game_3_dark(lab):
     new_game(lab, 3)
     run(lab, 2)
+
+
+def distant_lightning(lab):
+    """The storm outside (shared/storm.py) at a bright moment: the screen lightens, the dark stays dark."""
+    game_3_dark(lab)
+    return Extras(flash=0.8)
 
 
 def game_3_lit(lab):
@@ -177,15 +185,15 @@ def game_over(lab):
 
 SCENES = [("intro", intro), ("title", title), ("game 1", game_1_start), ("game 1, match lit", game_1_lit),
           ("game 1, monsters", game_1_monsters), ("floor 2", on_floor(2)), ("floor 3", on_floor(3)),
-          ("floor 4", on_floor(4)), ("game 3, dark", game_3_dark),
+          ("floor 4", on_floor(4)), ("game 3, dark", game_3_dark), ("distant lightning", distant_lightning),
           ("game 3, match lit", game_3_lit), ("game 3, stairs", game_3_stairs),
           ("game 3, monster near", game_3_monster_near), ("lightning", lightning), ("caught", dying),
           ("won", won), ("game over", game_over)]
 
 
 def render(look, game, lab, label, scene):
-    scene(lab)
-    remaster = look.draw(game.state(lab.ram), lab.frame_count)
+    extras = scene(lab) or NO_EXTRAS
+    remaster = look.draw(game.state(lab.ram), lab.frame_count, extras)
     original = np.array(Image.fromarray(lab.picture()).resize((ORIGINAL_W, HEIGHT), Image.NEAREST))
     tile = np.zeros((HEIGHT + LABEL_H, remaster.shape[1] + 4 + ORIGINAL_W, 3), np.uint8)
     tile[LABEL_H:, :remaster.shape[1]] = remaster
@@ -241,9 +249,10 @@ def main():
     lab = Lab()
     tiles = []
     for label, scene in SCENES:
-        start = lab.save()
+        start, start_frame = lab.save(), lab.frame_count  # each scene from the same moment
         tiles.append(render(look, game, lab, label, scene))
         lab.load(start)
+        lab.frame_count = start_frame
     os.makedirs(SHOTS, exist_ok=True)
     path = os.path.join(SHOTS, f"preview_{args.look}_{look.pack.name}.png")
     scenes = sheet(tiles)
