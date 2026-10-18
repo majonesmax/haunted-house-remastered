@@ -321,7 +321,7 @@ class GameWindow:
     def toggle_lights(self):
         """O: the cheat - turn the lights on (everything on the floor shows), or off again."""
         self.lights_on = not self.lights_on
-        on = ["LIGHTS ON - A CHEAT.", "O AGAIN TURNS THEM OFF."]
+        on = ["LIGHTS ON - A CHEAT.", "PICKING UP NEEDS A MATCH LIT.", "O AGAIN TURNS THEM OFF."]
         self.show_note(on if self.lights_on else "LIGHTS OFF")
 
     def give_hint(self):

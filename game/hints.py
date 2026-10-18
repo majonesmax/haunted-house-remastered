@@ -98,7 +98,7 @@ def across(from_room, to_room):
 
 def tips(state):
     """Practical help, the most useful first."""
-    found = []
+    found = [["TO PICK SOMETHING UP, LIGHT", "A MATCH AND WALK INTO IT."]]
     if state.game >= LOCKS_FROM and state.carried != KEY:
         found.append(["LOCKED DOORS OPEN FOR THE", f"MASTER KEY - ON FLOOR {state.items[KEY].floor + 1}."])
     if state.carried != SCEPTER:
