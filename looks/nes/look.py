@@ -77,6 +77,7 @@ class NesLook(FloorLook):
     def __init__(self, pack, rom):
         super().__init__(pack, rom)
         self.nearest = {}  # (r, g, b) -> its NES colour
+        self.shifted = {}  # (packed colour, rows) -> that colour moved rows up or down the palette
 
     # --- colours -------------------------------------------------------------------------------------
     def to_nes(self, rgb):
@@ -106,11 +107,20 @@ class NesLook(FloorLook):
         return self.shift_rows(rgb, LIGHTNING_ROWS)
 
     def shift_rows(self, rgb, rows):
-        """Every colour moved `rows` rows up (lighter) or down (darker) the NES palette, keeping its hue."""
-        flat = rgb.reshape(-1, 3)
-        colours, where = np.unique(flat, axis=0, return_inverse=True)
-        moved = np.array([PAL.NES[shifted(PAL.nearest_nes(colour), rows)] for colour in colours], np.uint8)
-        return moved[where.reshape(-1)].reshape(rgb.shape)
+        """Every colour moved `rows` rows up (lighter) or down (darker) the NES palette, keeping its hue.
+        Each distinct colour is worked out once (packed into one number, as in to_nes - finding the
+        distinct colours row by row took 28 ms a frame through the win, and the sound stuttered)."""
+        red, green, blue = (rgb[..., channel].astype(np.int32) for channel in range(3))
+        colours, where = np.unique((red << 16) | (green << 8) | blue, return_inverse=True)
+        moved = np.array([self.shifted_colour(int(colour), rows) for colour in colours], np.uint8)
+        return moved[where.reshape(rgb.shape[:-1])]
+
+    def shifted_colour(self, packed, rows):
+        key = (packed, rows)
+        if key not in self.shifted:
+            colour = (packed >> 16, (packed >> 8) & 255, packed & 255)
+            self.shifted[key] = PAL.NES[shifted(PAL.nearest_nes(colour), rows)]
+        return self.shifted[key]
 
     def background(self):
         return BLACK
