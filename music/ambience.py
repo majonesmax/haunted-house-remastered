@@ -108,7 +108,7 @@ def place_for(state: GameState, intro: bool) -> str:
 class Ambience:
     """The beds and one-offs, made in the background; each bed keeps its place in its loop."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.beds: dict[str, Samples] = {}           # place -> its bed, once made
         self.positions: dict[str, int] = {}          # place -> where its bed is up to
         self.thunders: list[Samples] = []

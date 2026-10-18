@@ -9,7 +9,7 @@ made.
 import numpy as np
 
 from shared.pixelart import from_ascii
-from shared.types import Picture, Rgb
+from shared.types import Floats, Picture, Rgb
 
 
 def ramp(dark: Rgb, light: Rgb, count: int) -> list[Rgb]:
@@ -42,7 +42,7 @@ def repeat(motif: str, width: int, height: int) -> str:
     return "\n".join(filled)
 
 
-def brightness(picture: Picture, factors) -> Picture:   # factors: one number per row
+def brightness(picture: Picture, factors: Floats) -> Picture:   # factors: one number per row
     """Each row of an RGBA picture made lighter or darker by its factor (a vertical gradient)."""
     out = picture.copy()
     rgb = out[..., :3].astype(float) * np.asarray(factors, float)[:, None, None]

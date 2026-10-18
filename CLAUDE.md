@@ -82,11 +82,13 @@ The person who owns this code reads it rather than writes it, and isn't a Python
 - **Short functions:** about 40 lines at most, with few branches.
 - **Types on every signature.** `def draw(self, state: GameState, frame_no: int) -> Picture`. The plain
   names for arrays and sounds are in `shared/types.py` (Picture, Mask, Floats, Samples, Rgb, Point,
-  Instrument); records are `typing.NamedTuple`s with a typed field per line. pyright checks them.
+  Instrument); records are `typing.NamedTuple`s with a typed field per line. pyright checks them, and ruff
+  (ANN rules) flags any function left without them.
 - Lines up to 110 characters (`ruff.toml`).
 - `tools/readability.py` checks all of this (ruff's rules and names under 3 letters) against
   `tools/readability_baseline.json` - every file is at zero; keep it there. `.claude/settings.json` runs it
-  after every edit, so an assistant hears about a slip straight away.
+  after every edit, so an assistant hears about a slip straight away; GitHub runs the same checks on every
+  push (`.github/workflows/checks.yml`).
 
 ## Style
 

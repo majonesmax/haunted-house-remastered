@@ -335,7 +335,7 @@ class Facing:
     and where it's heading next (and while it chases, that plan isn't where it's going). Judged over the
     last FACING_MEMORY frames, as monsters step only on some frames."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.trails: dict[int, deque[Place]] = {}   # monster number -> its recent (floor, x, y)
         self.facings: dict[int, str] = {}           # monster number -> "left" / "right" / "up" / "down"
 

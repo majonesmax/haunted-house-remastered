@@ -8,6 +8,8 @@ ORIGINAL_TO_NES   2600 object colour -> NES colour, for the original graphics
 
 import numpy as np
 
+from shared.types import Rgb
+
 NES = [  # 64 colours, 4 a row: colour 0x28 is row 0x28, entry 0
     (84, 84, 84), (0, 30, 116), (8, 16, 144), (48, 0, 136),  # 0x00-0x03
     (68, 0, 100), (92, 0, 48), (84, 4, 0), (60, 24, 0),  # 0x04-0x07
@@ -37,6 +39,6 @@ def flash_colour(frame_no: int, every: int = 6) -> int:
     return FLASH_CYCLE[(frame_no // every) % len(FLASH_CYCLE)]
 
 
-def nearest_nes(rgb) -> int:
+def nearest_nes(rgb: Rgb) -> int:
     """Index of the NES colour closest to (r, g, b)."""
     return int(np.argmin(((np.array(NES) - rgb) ** 2).sum(axis=1)))

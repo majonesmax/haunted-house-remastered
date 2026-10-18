@@ -100,12 +100,23 @@ def short_names(path: str) -> list[Issue]:
     return issues
 
 
+def project_python() -> str:
+    """The Python whose packages pyright should see: the project's .venv, else this one (a build server's)."""
+    candidates = (os.path.join(ROOT, ".venv", "bin", "python"),
+                  os.path.join(ROOT, ".venv", "Scripts", "python.exe"))
+    for path in candidates:
+        if os.path.exists(path):
+            return path
+    return sys.executable
+
+
 def type_issues(files: list[str]) -> list[Issue]:
     """[(file, line, "TYPE", message)] from pyright, the type checker."""
     pyright = find_tool("pyright")
     if pyright is None or not files:
         return []
-    result = subprocess.run([pyright, "--outputjson", *files], cwd=ROOT, capture_output=True, text=True)
+    command = [pyright, "--outputjson", "--pythonpath", project_python(), *files]
+    result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
     report = json.loads(result.stdout or "{}")
     issues: list[Issue] = []
     for item in report.get("generalDiagnostics", []):

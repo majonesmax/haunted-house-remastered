@@ -18,7 +18,7 @@ PICKUPS = {0: "pickup_key", 1: "pickup_scepter"}         # item number -> its so
 
 
 class EventWatcher:
-    def __init__(self):
+    def __init__(self) -> None:
         self.before: GameState | None = None
         self.walking = 0
         self.since_thunder = THUNDER_GAP

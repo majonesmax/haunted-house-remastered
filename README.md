@@ -174,7 +174,8 @@ they show follows the original's own rules for what may be seen in the dark.
 
 The rules for working on it, for people and AI assistants alike, are in [CLAUDE.md](CLAUDE.md): the words
 (look, cast, world, pack), the commands, and the rules - never change the game, draw things where the game has
-them, reveal only what the original reveals, art is text, and prove nothing else moved.
+them, reveal only what the original reveals, art is text, and prove nothing else moved. GitHub runs the
+readability and type checks on every push.
 
 ```sh
 pip install -r requirements-dev.txt
@@ -183,6 +184,8 @@ python tests/golden.py                 # every look still draws exactly the same
 python tests/test_hints.py             # G's hints point the right way, in the running game
 python tests/test_events.py            # each sound effect fires on the right event
 python play.py --check                 # the app plays itself for a few seconds and says whether it works
+pyright                                # the type hints check out
+python tools/readability.py            # nothing got harder to read: ruff's rules, names, types
 ruff check --config ruff.toml .        # the readability rules
 ```
 

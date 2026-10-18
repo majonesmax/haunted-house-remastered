@@ -20,7 +20,18 @@ select = [
     "PLR0915",  # too many statements
     "PLR1702",  # blocks nested too deep
     "F821",     # a name that doesn't exist (a rename that missed a spot)
+    "ANN001",   # a function argument without a type...
+    "ANN002",   # ...or *args...
+    "ANN003",   # ...or **kwargs...
+    "ANN201",   # ...or a function without its return type
+    "ANN202",
+    "ANN204",
+    "ANN205",
+    "ANN206",
 ]
+
+[lint.flake8-annotations]
+mypy-init-return = true        # __init__ needn't say "-> None" when its arguments are typed
 
 [lint.mccabe]
 max-complexity = 10

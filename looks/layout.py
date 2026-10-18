@@ -15,11 +15,14 @@ The whole floor (256 lines up) is drawn once as one 240 x 512 picture (looks/sce
 80 lines of it around the eyes, exactly where the game's own camera puts them.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from numpy.typing import NDArray
 
 if TYPE_CHECKING:
     from game.state import GameState
 
+Numbers = float | NDArray[Any]      # a number, or a numpy array of them: the same arithmetic either way
 SCREEN_W, SCREEN_H = 256, 240
 UNIT_X, UNIT_Y = 1.5, 2.0           # pixels per floor unit, across and down
 VIEW_LINES, VIEW_UNITS_ACROSS = 80, 160
@@ -56,6 +59,6 @@ def to_view(state: "GameState", x: int, y: int, height: int) -> tuple[float, flo
     return (x + 4) * UNIT_X, (VIEW_LINES - line - height / 2) * UNIT_Y
 
 
-def floor_point(row, column):   # numbers, or numpy arrays of them: the same either way
+def floor_point(row: Numbers, column: Numbers) -> tuple[Numbers, Numbers]:   # one point, or many at once
     """The floor (x, y) at the middle of a pixel of the whole-floor picture."""
     return (column + 0.5) / UNIT_X, FLOOR_LINES - (row + 0.5) / UNIT_Y
