@@ -12,3 +12,8 @@ __pycache__/
 .venv/
 .ruff_cache/
 .DS_Store
+
+# the downloads, as package/build.py makes them
+package/stage/
+package/build/
+package/dist/

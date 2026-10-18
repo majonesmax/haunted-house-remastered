@@ -32,6 +32,8 @@ def options():
     parser.add_argument("--look", default="nes", choices=sorted(looks.LOOKS), help="the look to start in")
     parser.add_argument("--pack", help="a pack to show instead of the look's own (packs/)")
     parser.add_argument("--grid", action="store_true", help="start in the grid view")
+    parser.add_argument("--check", action="store_true",
+                        help="run itself for a few seconds, silently, and say whether it works")
     args = parser.parse_args()
     if not os.path.isfile(paths.CORE):
         parser.error(f"no emulator core at {paths.CORE} - run: python tools/get_core.py")
@@ -48,6 +50,9 @@ def main():
         return 1
     from app.window import GameWindow  # after the checks: opening the window starts the sound and display
     window = GameWindow(rom, args.look, args.pack)
+    if args.check:
+        from app import self_check
+        return 0 if self_check.run(window) else 1
     if args.grid:
         window.view = "grid"
         window.screen = window.set_mode()

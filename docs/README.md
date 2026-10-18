@@ -46,7 +46,10 @@ Run each with Python from the repository's root.
 
 | Command | What it does |
 |---|---|
-| `play.py` | plays the game (`--look`, `--pack`, `--grid`) |
+| `play.py` | plays the game (`--look`, `--pack`, `--grid`; `--check`: plays itself for a few seconds and says whether it works) |
+| `package/build.py` | builds the download for the system it runs on (`package/README.txt` goes in it) |
+| `package/make_icon.py` | the app's icon, from the nocturne pack's own pictures |
+| `tools/get_core.py` | the pinned Stella core, `b52ccb02e`, checksum-verified (from Adventure Forever's releases) |
 | `tools/preview.py` | every look in every scripted situation, beside the original, as one picture in `shots/` |
 | `tests/golden.py` | every look still draws exactly the same pixels in those situations (`--update` after a change you meant) |
 | `tests/test_facing.py` | monsters face the way they walk |

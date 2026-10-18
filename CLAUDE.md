@@ -40,6 +40,8 @@ python -m music.orchestral_effects         # ...and the SNES look's, played by t
 python -m music.ambience                   # the house's ambience (rain, thunder, floorboards, noises) in shots/ambience/
 python tests/test_events.py                # each effect fires on the right event in the running game
 python tools/readme_media.py               # the README's pictures (the looks' own art only)
+python play.py --check                     # the app plays itself for a few seconds and says whether it works
+python package/build.py                    # the download for this system, in package/dist/ (then run it --check)
 ruff check --config ruff.toml .            # the readability rules
 ```
 

@@ -45,6 +45,25 @@ More: `python play.py --look snes`, `--grid`, `--pack <name>`, `--help`. Recordi
 New to the game? Press **H** twice in the game: what you're trying to do, and the rules the original never
 explains. Each game number's rules show on the title screen.
 
+## Building the downloads
+
+```sh
+pip install -r requirements-dev.txt    # adds PyInstaller
+python package/build.py                # -> package/dist/Haunted-House-<version>-<system>-<processor>.zip
+```
+
+Run it on each system: PyInstaller can't build for another one, so the Windows download is built on Windows.
+Every build bundles the same emulator: Stella `b52ccb02e`, built for each system by Adventure Forever's
+"Stella cores" workflow and checked against its checksums by `tools/get_core.py`. (libretro's own macOS
+build is stuck at that version and its Windows and Linux builds have moved on, so pinning our own is the only
+way every system runs the identical, tested emulator.) The download includes Stella's GPL licence and where
+its exact source is.
+
+To check a build without playing it, run the app with `--check`: it plays itself for a few seconds, silently,
+and says whether it works, in `self-check.txt` and `self-check.png` in your Pictures folder, under
+"Haunted House". On a Mac:
+`"Haunted House.app/Contents/MacOS/Haunted House" --check`; on Windows: `"Haunted House.exe" --check`.
+
 ## Controls
 
 In the game, **H** shows all of these.

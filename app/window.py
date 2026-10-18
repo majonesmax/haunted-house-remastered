@@ -87,6 +87,7 @@ class GameWindow:
         self.frame_no = 0
         self.intro = True              # the story, at launch, until a key is pressed
         self.keys_held_off = False     # after the story: the key that ended it isn't passed to the game
+        self.pressed_by_check = set()  # keys held by play.py --check (app/self_check.py), as if pressed
         self.scenes_ready = False      # every look's floors drawn (prepare_looks)
         self.storm = Storm()
         self.state = None
@@ -172,7 +173,7 @@ class GameWindow:
 
     def step_game(self):
         pressed = pygame.key.get_pressed()
-        held = {button for key, button in JOYSTICK.items() if pressed[key]}
+        held = {button for key, button in JOYSTICK.items() if pressed[key] or key in self.pressed_by_check}
         if self.keys_held_off and not held:
             self.keys_held_off = False
         if self.intro or self.keys_held_off:
