@@ -4,7 +4,8 @@ It keeps the NES look's layout and screens (looks/nes/look.py) and changes the c
 SNES could do:
   colour    15-bit (32 levels a channel); sprites get soft outlines and at most 15 colours (outline.py)
   light     colour math instead of dithering: the match's light is a smooth warm gradient, hottest at the
-            flame, with dust drifting in it; unlit walls in game 1 are moonlit blue; lightning washes
+            flame, with dust drifting in it; in game 1, unlit walls are moonlit blue and shafts of moonlight
+            fall across the floor; lightning washes
             everything pale blue-white
   ghosts    see-through (a translucent sprite layer)
   sound     the orchestra synth (music/orchestra.py): organ, harpsichord, strings, timpani, in a hall
@@ -16,7 +17,7 @@ Its own pack is packs/nocturne, drawn in 16-bit colour ramps.
 import numpy as np
 
 from looks.base import FloorLook, flicker, light_reach_grid
-from looks.layout import SCREEN_H, SCREEN_W, VIEW_H, VIEW_Y
+from looks.layout import SCREEN_H, SCREEN_W, VIEW_H, VIEW_W, VIEW_Y
 from looks.nes.look import MANSION_AT, MOON_AT, SUN_AT, SUN_SCALE, NesLook
 from looks.snes.outline import recolour_outline
 from shared.pixelart import snes_rgb
@@ -26,6 +27,9 @@ WARM = np.array([1.08, 0.94, 0.76])     # the match's light, warm
 FLAME_GLOW = np.array([70, 34, 0])      # added close to the flame
 MOONLIGHT = np.array([0.42, 0.48, 0.72])  # unlit walls (game 1): cold and blue
 UNLIT_FLOOR = np.array([0.12, 0.13, 0.2])
+MOON_SHAFTS = np.array([0.1, 0.12, 0.2])    # game 1: shafts of moonlight across the floor add this much...
+SHAFT_EVERY, SHAFT_WIDTH = 104, 34          # ...a shaft every this many pixels along the floor, this wide
+SHAFT_SLANT = 0.7                           # pixels across per pixel down: the light falls in at a slant
 DIM = np.array([0.32, 0.34, 0.5])       # the edge of the light, and the shadows under the faces
 LIGHTNING_WASH = np.array([150, 170, 220])
 GHOST_OPACITY = 0.62
@@ -88,7 +92,7 @@ class SnesLook(NesLook):
         full, walls = layers.full.astype(float), layers.walls[..., None]
         reach = light_reach_grid(state, rows) / flicker(frame_no)
         if not state.dark:
-            unlit = np.where(walls, full * MOONLIGHT, full * UNLIT_FLOOR)
+            unlit = np.where(walls, full * MOONLIGHT, full * (UNLIT_FLOOR + MOON_SHAFTS * moon_shafts(rows)))
         elif state.lightning:
             unlit = np.where(walls, layers.flash.astype(float), full * UNLIT_FLOOR)
         else:
@@ -151,6 +155,15 @@ class SnesLook(NesLook):
         add_moon_halo(screen, is_sky)
         add_rain(screen, frame_no)
         screen[:] = snes_rgb(screen)
+
+
+def moon_shafts(rows):
+    """0-1 over the view: soft slanting bands of moonlight, fixed to the floor (so they scroll with it)."""
+    row_numbers = np.arange(rows.start, rows.stop)[:, None]
+    columns = np.arange(VIEW_W)[None, :]
+    along = (columns + row_numbers * SHAFT_SLANT) % SHAFT_EVERY
+    middle = np.abs(along - SHAFT_EVERY / 2) / (SHAFT_WIDTH / 2)   # 0 at a shaft's middle, 1 at its edge
+    return np.clip(1 - middle, 0, 1)[..., None] ** 0.7
 
 
 def panel(screen, top, bottom):

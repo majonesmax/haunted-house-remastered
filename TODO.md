@@ -28,8 +28,8 @@ What's next for the remaster, roughly in order. Tick items off as they're done.
 
 ## 4. Finish the SNES layer
 
-- [ ] Orchestral sound effects (made from the orchestra's own voices)
-- [ ] An art pass: the hood, and how much of the floor shows in moonlight
+- [x] Orchestral sound effects (made from the orchestra's own voices)
+- [x] An art pass: the hood, and how much of the floor shows in moonlight
 
 ## 5. Show it off, as Adventure Forever does
 

@@ -5,26 +5,28 @@ soundtrack under either. The remastered sound is the effects and the house's amb
     board.follow(state, intro, thunder)   # once a frame: the music follows the game; events trigger effects
     AudioOut(rate, mixer=board.mixer)   # the sound card's callback asks for the mix
 
-With the remastered effects on, the game's own sound is left out (its buzzes say the same things less
-clearly); music/events.py works out what happened, music/effects.py has the sounds.
+Each look's sound chip has its own effects: NES-style (music/effects.py) or the orchestra's
+(music/orchestral_effects.py), switching with the look. With the remastered effects on, the game's own sound
+is left out (its buzzes say the same things less clearly); music/events.py works out what happened.
 """
 
 import threading
 
 import numpy as np
 
-from music import effects
+from music import effects, orchestral_effects
 from music.ambience import Ambience
 from music.events import EventWatcher
 from music.player import mix
 
 MAX_VOICES = 8          # effects playing at once; the oldest gives way
+EFFECT_SETS = {"chiptune": effects, "orchestra": orchestral_effects}   # a sound chip -> its effects
 
 
 class SoundBoard:
     def __init__(self, music):
         self.music = music
-        self.sounds = effects.render_all()
+        self.sound_sets = {chip: maker.render_all() for chip, maker in EFFECT_SETS.items()}
         self.watcher = EventWatcher()
         self.ambience = Ambience()
         self.remastered = True
@@ -49,7 +51,7 @@ class SoundBoard:
 
     def play(self, name):
         with self.lock:
-            self.voices.append([self.sounds[name], 0])
+            self.voices.append([self.sound_sets[self.music.synth_name][name], 0])  # the look's own
             del self.voices[:-MAX_VOICES]
 
     def toggle_effects(self):

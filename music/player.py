@@ -74,6 +74,7 @@ class MusicPlayer:
     def __init__(self, songs, synth="chiptune"):
         self.songs = songs
         self.synth = SYNTHS[synth]
+        self.synth_name = synth
         self.rendered = {}       # name -> its samples, as the background renders them
         self.loops = {}          # name -> its Piece, kept so it resumes where it was
         self.lock = threading.Lock()

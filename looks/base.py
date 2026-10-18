@@ -223,7 +223,7 @@ class FloorLook(Look):
             self.hand_side = 1 if state.looking[0] > 0 else -1
         hand_side = "right" if self.hand_side > 0 else "left"
         hand_x = x + self.hand_side * HAND_OFFSET
-        return [("hood", None, x, y, HEIGHTS["eyes"], frame_no), eyes,
+        return [("hood", hand_side, x, y, HEIGHTS["eyes"], frame_no), eyes,  # lit on the match's side
                 ("match_hand", hand_side, hand_x, y - HAND_DROP, HEIGHTS["eyes"], frame_no)]
 
     def eyes_name(self, state, frame_no):
