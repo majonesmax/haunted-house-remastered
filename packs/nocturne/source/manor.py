@@ -125,8 +125,8 @@ def face(floor):
                                                  "g": GOLD[2]})
     if "ivy" in floor:
         leaves = art(IVY, shades("iI", floor["ivy"][1:]))
-        on = leaves[..., 3] > 0
-        paper[on] = leaves[on]
+        leafy = leaves[..., 3] > 0
+        paper[leafy] = leaves[leafy]
     paper = brightness(paper, CEILING_SHADOW)
     rail = np.concatenate([solid(1, CELL_W, GOLD[4]), solid(1, CELL_W, GOLD[1])])
     wainscot = wainscot_panels(floor["wainscot"])

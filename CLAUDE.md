@@ -45,6 +45,7 @@ python play.py --check                     # the app plays itself for a few seco
 python package/build.py                    # the download for this system, in package/dist/ (then run it --check)
 gh workflow run downloads.yml              # ...or GitHub builds Windows and macOS; a v* tag makes the release
 ruff check --config ruff.toml .            # the readability rules
+python tools/readability.py                # ...and no short names; no file may get harder to read (a hook runs it)
 ```
 
 The research checks (`tools/verify_*.py`) prove what the RAM and ROM mean; run them after changing anything in
@@ -79,6 +80,9 @@ The person who owns this code reads it rather than writes it, and isn't a Python
 - **Name the numbers.** `UNIT = 1.5` with a comment, not a bare `1.5`.
 - **Short functions:** about 40 lines at most, with few branches.
 - Lines up to 110 characters (`ruff.toml`).
+- `tools/readability.py` checks all of this (ruff's rules and names under 3 letters) against
+  `tools/readability_baseline.json` - every file is at zero; keep it there. `.claude/settings.json` runs it
+  after every edit, so an assistant hears about a slip straight away.
 
 ## Style
 

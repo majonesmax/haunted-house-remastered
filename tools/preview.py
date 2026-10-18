@@ -101,7 +101,7 @@ def on_floor(number):
     def scene(lab):
         new_game(lab, 1)
         lab.poke(M.FLOOR, number - 1)
-        lab.run_until(lambda l: l.peek(M.POS_Y) <= 0x70, held=[JOY_DOWN], limit=40)
+        lab.run_until(lambda lab: lab.peek(M.POS_Y) <= 0x70, held=[JOY_DOWN], limit=40)
         run(lab, 2, [BUTTON])
         run(lab, 3)
     return scene
@@ -120,7 +120,7 @@ def distant_lightning(lab):
 
 def game_3_lit(lab):
     new_game(lab, 3)
-    lab.run_until(lambda l: l.peek(M.POS_Y) <= 0x64, held=[JOY_DOWN], limit=60)
+    lab.run_until(lambda lab: lab.peek(M.POS_Y) <= 0x64, held=[JOY_DOWN], limit=60)
     run(lab, 2, [BUTTON])
     run(lab, 3)
 
@@ -128,8 +128,8 @@ def game_3_lit(lab):
 def game_3_stairs(lab):
     new_game(lab, 3)
     lab.poke(M.CARRIED, 0)  # the key, for the locked door on the way
-    lab.run_until(lambda l: l.peek(M.POS_X) <= 0x74, held=[JOY_LEFT], limit=60)
-    lab.run_until(lambda l: l.peek(M.ROOM) == 0, held=[JOY_DOWN], limit=200)
+    lab.run_until(lambda lab: lab.peek(M.POS_X) <= 0x74, held=[JOY_LEFT], limit=60)
+    lab.run_until(lambda lab: lab.peek(M.ROOM) == 0, held=[JOY_DOWN], limit=200)
     run(lab, 30, [JOY_DOWN])
     run(lab, 2, [BUTTON])
     run(lab, 3)
@@ -168,7 +168,7 @@ def won(lab):
     lab.poke(M.CARRIED, 2)
     for offset, shape in enumerate((8, 0xFF, 0xFF)):
         lab.poke(M.URN_SHAPES + offset, shape)
-    lab.run_until(lambda l: l.peek(M.GAME_STATE) == 0x44, held=[JOY_RIGHT], limit=60)
+    lab.run_until(lambda lab: lab.peek(M.GAME_STATE) == 0x44, held=[JOY_RIGHT], limit=60)
     run(lab, 20)
 
 
@@ -239,7 +239,7 @@ def facing_strip(look, width):
     for row, monster in enumerate(MONSTERS):
         top = LABEL_H + row * CELL
         hud.draw_text(strip, monster, 2, top + CELL // 2 - 4, (152, 150, 152))
-        for column, (facing, frame) in enumerate((f, n) for f in FACINGS for n in (0, 1, 2)):
+        for column, (facing, frame) in enumerate((way, step) for way in FACINGS for step in (0, 1, 2)):
             sprite = look.facing_picture(monster, facing, frame * 8)
             if sprite is None:
                 continue

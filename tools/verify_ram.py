@@ -121,14 +121,14 @@ def walls(lab, rom):
 
 def doorway_and_stairs(lab, rom):
     """Room 2 -> down through door 0 -> room 0 -> its bottom-edge stairs -> floor 1."""
-    lab.run_until(lambda l: l.peek(M.POS_X) <= 0x74, held=[JOY_LEFT])
-    frames = lab.run_until(lambda l: l.peek(0x88) & 0x80, held=[JOY_DOWN])
+    lab.run_until(lambda lab: lab.peek(M.POS_X) <= 0x74, held=[JOY_LEFT])
+    frames = lab.run_until(lambda lab: lab.peek(0x88) & 0x80, held=[JOY_DOWN])
     exits = R.room_exits(rom, 2)
     check("ROM DOOR_IDS: room 2's down exit is a door", exits["down"][0] == "door", str(exits["down"]))
     check("doorway: $88 = $83 (in a doorway, going down)", frames is not None and lab.peek(0x88) == 0x83,
           f"${lab.peek(0x88):02X}")
     check("doorway: $97 = room beyond (2 - 2 = 0)", lab.peek(0x97) == 0)
-    lab.run_until(lambda l: l.peek(M.ROOM) == 0, held=[JOY_DOWN])
+    lab.run_until(lambda lab: lab.peek(M.ROOM) == 0, held=[JOY_DOWN])
     check("doorway: $9C becomes 0 and $97 goes back to $FF", lab.peek(M.ROOM) == 0 and lab.peek(0x97) == 0xFF)
     walk(lab, "down", 80)
     y = lab.peek(M.POS_Y)
@@ -139,8 +139,8 @@ def doorway_and_stairs(lab, rom):
     expected = R.EDGES.index(stairs[0]["edge"]) | (4 if stairs[0]["goes"] == "up" else 0)
     check("ROM stairs tables: floor 1 room 0 has up stairs at the bottom; $9B agrees",
           stairs_byte == expected, f"$9B ${stairs_byte:X}, tables ${expected:X}")
-    lab.run_until(lambda l: l.peek(M.POS_X) <= 0x70, held=[JOY_LEFT])
-    lab.run_until(lambda l: l.peek(M.FLOOR) != 0, held=[JOY_DOWN], limit=60)
+    lab.run_until(lambda lab: lab.peek(M.POS_X) <= 0x70, held=[JOY_LEFT])
+    lab.run_until(lambda lab: lab.peek(M.FLOOR) != 0, held=[JOY_DOWN], limit=60)
     check("stairs: walking off the bottom edge goes up to floor 1 ($8D = 1)", lab.peek(M.FLOOR) == 1)
     check("stairs: $9B bit 6 set (just used the stairs)", lab.peek(0x9B) & 0x40)
     above = R.stairs(rom, 1, 0)
@@ -200,7 +200,7 @@ def match(lab, _rom):
           first is not None and first > 200, str(first))
     second = frames_until_match_time_changes(lab)
     check("$DF then loses 1 every 60 frames ($87)", second == FRAMES_PER_SECOND, str(second))
-    lasted = lab.run_until(lambda l: l.peek(M.FLAGS) & 0x40 == 0, limit=FRAMES_PER_SECOND * 20)
+    lasted = lab.run_until(lambda lab: lab.peek(M.FLAGS) & 0x40 == 0, limit=FRAMES_PER_SECOND * 20)
     check("the match goes out when $DF reaches 0", lasted is not None and lab.peek(M.MATCH_TIME) == 0,
           f"after {lasted} more frames")
     for _ in range(9):
@@ -223,7 +223,7 @@ def items(lab, _rom):
     light_match(lab)
     lab.run(4)
     check("a lit match shows a nearby item ($86 = 1)", lab.peek(0x86) == 1)
-    lab.run_until(lambda l: l.peek(M.CARRIED) != M.NOTHING, limit=30, held=[JOY_RIGHT])
+    lab.run_until(lambda lab: lab.peek(M.CARRIED) != M.NOTHING, limit=30, held=[JOY_RIGHT])
     check("touching the scepter picks it up ($9A = 1)", lab.peek(M.CARRIED) == 1)
     walk(lab, "left", 10)
     lab.run(10)
@@ -238,7 +238,7 @@ def items(lab, _rom):
     lab.poke(M.CARRIED, 2)
     place_item(lab, 3, lab.peek(M.POS_X) + 6, lab.peek(M.POS_Y) - 2)
     light_match(lab)
-    lab.run_until(lambda l: l.peek(M.URN_SHAPES) != 2, limit=30, held=[JOY_RIGHT])
+    lab.run_until(lambda lab: lab.peek(M.URN_SHAPES) != 2, limit=30, held=[JOY_RIGHT])
     shapes = [lab.peek(M.URN_SHAPES + i) for i in range(3)]
     check("carrying piece 1 and touching piece 2 joins them: shapes 5, $FF, 4", shapes == [5, 0xFF, 4],
           str(shapes))
@@ -251,12 +251,12 @@ def winning(lab, _rom):
     lab.poke(M.URN_SHAPES, 8)
     lab.poke(M.URN_SHAPES + 1, 0xFF)
     lab.poke(M.URN_SHAPES + 2, 0xFF)
-    lab.run_until(lambda l: l.peek(M.GAME_STATE) != 0, limit=60, held=[JOY_RIGHT])
+    lab.run_until(lambda lab: lab.peek(M.GAME_STATE) != 0, limit=60, held=[JOY_RIGHT])
     check("whole urn out of the front door (floor 0, room 2, right edge): $99 = $44",
           lab.peek(M.GAME_STATE) == 0x44, f"${lab.peek(M.GAME_STATE):02X}")
     check("won: $8A bit 0 set", lab.peek(M.FLAGS) & 0x01)
     lab.load(start)
-    lab.run_until(lambda l: l.peek(M.POS_X) == 0x94, limit=60, held=[JOY_RIGHT])
+    lab.run_until(lambda lab: lab.peek(M.POS_X) == 0x94, limit=60, held=[JOY_RIGHT])
     lab.run(10, [JOY_RIGHT])
     check("without the urn the front door doesn't let you out", lab.peek(M.GAME_STATE) == 0)
     lab.load(start)
@@ -298,7 +298,7 @@ def dying(lab, _rom):
     check("caught: $80 death timer = $FF-ish, $96 lives 8, $CA = the monster",
           lab.peek(M.DEATH_TIMER) > 0xF0 and lab.peek(M.LIVES) == 8 and lab.peek(M.KILLED_BY) == 2,
           f"$80 ${lab.peek(M.DEATH_TIMER):02X} lives {lab.peek(M.LIVES)} $CA {lab.peek(M.KILLED_BY)}")
-    frames = lab.run_until(lambda l: l.peek(M.GAME_STATE) == 0, limit=300)
+    frames = lab.run_until(lambda lab: lab.peek(M.GAME_STATE) == 0, limit=300)
     check("after the death timer runs out, play goes on ($99 = 0)", frames is not None and frames > 200,
           str(frames))
     lab.load(start)
@@ -324,7 +324,7 @@ def game_numbers(lab, _rom):
     lab.poke(M.CARRIED, 0)
     caught(lab, 1)
     check("game 7: caught by the bat, $CA = 1", lab.peek(M.KILLED_BY) == 1)
-    lab.run_until(lambda l: l.peek(M.GAME_STATE) == 0, limit=300)
+    lab.run_until(lambda lab: lab.peek(M.GAME_STATE) == 0, limit=300)
     bat = (lab.peek(M.MONSTER_FLOOR + 1), lab.peek(M.MONSTER_X + 1), lab.peek(M.MONSTER_Y + 1))
     key = (lab.peek(M.ITEM_FLOOR), lab.peek(M.ITEM_X), lab.peek(M.ITEM_Y))
     check("...when play goes on, the bat has taken the key: $9A = $FF, key where the bat is",

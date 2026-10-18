@@ -66,8 +66,8 @@ def door_close():
 def locked():
     """The handle rattles; a low string says no."""
     rattles = [(index * 0.07, scrape(6 + index, 0.03, 900, 4000, 0.01)) for index in range(3)]
-    no = notes([38, 37], 0.14, lambda freq, length: strings(freq, length, attack=0.02), ring=0.3)
-    return place(rattles + [(0.22, no * 0.7)], 0.8)
+    refusal = notes([38, 37], 0.14, lambda freq, length: strings(freq, length, attack=0.02), ring=0.3)
+    return place(rattles + [(0.22, refusal * 0.7)], 0.8)
 
 
 def bump():

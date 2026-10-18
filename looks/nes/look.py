@@ -85,8 +85,8 @@ class NesLook(FloorLook):
         red, green, blue = (rgb[..., channel].astype(np.int32) for channel in range(3))
         colours, where = np.unique((red << 16) | (green << 8) | blue, return_inverse=True)
         unpacked = np.stack([colours >> 16, (colours >> 8) & 255, colours & 255], axis=1)
-        snapped = np.array([self.nearest_colour(tuple(int(c) for c in colour)) for colour in unpacked],
-                           np.uint8).reshape(-1, 3)
+        nearest = [self.nearest_colour(tuple(int(channel) for channel in colour)) for colour in unpacked]
+        snapped = np.array(nearest, np.uint8).reshape(-1, 3)
         return snapped[where.reshape(rgb.shape[:-1])]
 
     def nearest_colour(self, rgb):
@@ -342,13 +342,13 @@ class NesLook(FloorLook):
         hud.draw_text(screen, name, centred(name), y0 + 6, WHITE)
         hud.draw_text(screen, subtitle, centred(subtitle), y0 + 18, GREY)
 
-    def draw_world_picture(self, screen, name, at, scale):
+    def draw_world_picture(self, screen, name, place, scale):
         """A world picture (the pack's own title art), scaled up, at (x, y); None if the pack has none."""
         frames = self.pack.world.get(name)
         if not frames:
             return None
         picture = self.adapt(frames[0]).repeat(scale, axis=0).repeat(scale, axis=1)
-        blit(screen, picture, *at)
+        blit(screen, picture, *place)
         return picture
 
     def darken_window(self, screen):

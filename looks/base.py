@@ -390,8 +390,8 @@ def light_reach_grid(state, rows):
     """light_reach for every pixel of the view."""
     row_numbers = np.arange(rows.start, rows.stop)[:, None]
     columns = np.arange(VIEW_W)[None, :]
-    xs, ys = floor_point(row_numbers, columns)
-    return V.light_reach(state, xs, ys)
+    floor_xs, floor_ys = floor_point(row_numbers, columns)
+    return V.light_reach(state, floor_xs, floor_ys)
 
 
 def item_name(item):

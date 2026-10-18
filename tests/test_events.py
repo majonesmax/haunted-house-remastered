@@ -81,16 +81,16 @@ def matches(lab):
 
 def doors_and_stairs(lab):
     scene = new_game(lab, 1)
-    scene.walk_until(JOY_LEFT, lambda l: l.peek(M.POS_X) <= 0x74)
-    scene.walk_until(JOY_DOWN, lambda l: l.peek(M.ROOM) == 0)
+    scene.walk_until(JOY_LEFT, lambda lab: lab.peek(M.POS_X) <= 0x74)
+    scene.walk_until(JOY_DOWN, lambda lab: lab.peek(M.ROOM) == 0)
     check("into a doorway (game 1, where the 2600 is silent): door_open", "door_open" in scene.heard)
     check("into the next room: door_close", "door_close" in scene.heard)
     steps = scene.count("footstep")
     check("walking makes footsteps, not too many", 3 <= steps <= 20, f"{steps} footsteps")
-    scene.walk_until(JOY_DOWN, lambda l: l.peek(M.FLOOR) == 1)
+    scene.walk_until(JOY_DOWN, lambda lab: lab.peek(M.FLOOR) == 1)
     check("up the stairs: stairs_up", scene.count("stairs_up") == 1, scene.heard[-3:])
     scene.run(20, [JOY_UP])
-    scene.walk_until(JOY_DOWN, lambda l: l.peek(M.FLOOR) == 0)
+    scene.walk_until(JOY_DOWN, lambda lab: lab.peek(M.FLOOR) == 0)
     check("down the stairs: stairs_down", scene.count("stairs_down") == 1, scene.heard[-3:])
 
 
@@ -98,12 +98,12 @@ def walls_and_locks(lab):
     scene = new_game(lab, 1)
     scene.run(90, [JOY_UP])
     check("walking into a wall: bump", "bump" in scene.heard, scene.heard[-4:])
-    scene.walk_until(JOY_DOWN, lambda l: l.peek(M.POS_Y) <= 0x86)  # back to the front door's level
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.POS_X) >= 0x94)
+    scene.walk_until(JOY_DOWN, lambda lab: lab.peek(M.POS_Y) <= 0x86)  # back to the front door's level
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.POS_X) >= 0x94)
     scene.run(10, [JOY_RIGHT])
     check("the front door without the urn: locked", "locked" in scene.heard, scene.heard[-4:])
     scene = new_game(lab, 3)
-    scene.walk_until(JOY_LEFT, lambda l: l.peek(M.POS_X) <= 0x74)
+    scene.walk_until(JOY_LEFT, lambda lab: lab.peek(M.POS_X) <= 0x74)
     scene.run(60, [JOY_DOWN])
     check("a locked door (game 3): locked", "locked" in scene.heard, scene.heard[-4:])
 
@@ -118,7 +118,7 @@ def items(lab):
     scene = new_game(lab, 3)
     place_item(lab, KEY, 6, -2)
     scene.run(2, [BUTTON])
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.CARRIED) == KEY, limit=30)
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.CARRIED) == KEY, limit=30)
     check("picking up the key: pickup_key", "pickup_key" in scene.heard, scene.heard)
     scene.run(10, [JOY_LEFT])
     scene.run(2, [BUTTON])
@@ -128,11 +128,11 @@ def items(lab):
     lab.poke(M.CARRIED, 2)
     place_item(lab, 3, 6, -2)
     scene.run(2, [BUTTON])
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.URN_SHAPES) == 5, limit=30)
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.URN_SHAPES) == 5, limit=30)
     check("two urn pieces joining: urn_join", scene.count("urn_join") == 1, scene.heard)
     place_item(lab, 4, 6, -2)
     lab.poke(M.MATCH_TIME, 20)
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.URN_SHAPES) == 8, limit=40)
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.URN_SHAPES) == 8, limit=40)
     check("the urn whole: urn_whole", scene.count("urn_whole") == 1, scene.heard)
 
 

@@ -124,7 +124,7 @@ def door_passes(lab, start, floor, door, carried):
     first, second = R.doors(rom)[door]
     direction = "up" if second - first == 2 else "left"
     place_player(lab, floor, first, carried)
-    return walk_until(lab, direction, lambda l: l.peek(M.ROOM) == second)
+    return walk_until(lab, direction, lambda lab: lab.peek(M.ROOM) == second)
 
 
 def check_doors(lab, game, start):
@@ -148,7 +148,7 @@ def enter_room(lab, start, floor, room):
             step = R.table(rom, "ROOM_STEP")[R.DIRECTIONS.index(direction)]
             neighbour = (room + step) & 0xFF
             place_player(lab, floor, neighbour, KEY)
-            return walk_until(lab, OPPOSITE[direction], lambda l: l.peek(M.ROOM) == room)
+            return walk_until(lab, OPPOSITE[direction], lambda lab: lab.peek(M.ROOM) == room)
     return False
 
 
@@ -180,16 +180,16 @@ def go_to_centre(lab, room):
     """Walk to the room's centre: across first, then up or down (doors line up with the centre)."""
     x, y = R.room_centre(rom, room)
     across = "right" if lab.peek(M.POS_X) < x else "left"
-    walk_until(lab, across, lambda l: l.peek(M.POS_X) == x)
+    walk_until(lab, across, lambda lab: lab.peek(M.POS_X) == x)
     up_down = "up" if lab.peek(M.POS_Y) < y else "down"
-    walk_until(lab, up_down, lambda l: l.peek(M.POS_Y) == y)
+    walk_until(lab, up_down, lambda lab: lab.peek(M.POS_Y) == y)
 
 
 def stairs_walk_works(lab, floor, room, game):
     stairs = R.stairs(rom, floor, game)[room]
     go_to_centre(lab, room)
     direction = {"left": "left", "right": "right", "top": "up", "bottom": "down"}[stairs["edge"]]
-    walk_until(lab, direction, lambda l: l.peek(M.FLOOR) != floor)
+    walk_until(lab, direction, lambda lab: lab.peek(M.FLOOR) != floor)
     change = 1 if stairs["goes"] == "up" else -1
     return lab.peek(M.FLOOR) == floor + change
 
@@ -203,7 +203,7 @@ def check_key(lab, game, start):
     lab.poke(M.ITEM_X, lab.peek(M.POS_X) + 6)
     lab.poke(M.ITEM_Y, lab.peek(M.POS_Y) - 2)
     light_match(lab)
-    walk_until(lab, "right", lambda l: l.peek(M.CARRIED) == KEY, limit=30)
+    walk_until(lab, "right", lambda lab: lab.peek(M.CARRIED) == KEY, limit=30)
     record("master key shown (and can be picked up)", game, game >= 2, lab.peek(M.CARRIED) == KEY)
 
 
@@ -232,7 +232,7 @@ def check_monsters(lab, game, start):
     lab.load(start)
     lab.poke(M.CARRIED, KEY)
     caught_by(lab, model.BAT)
-    lab.run_until(lambda l: l.peek(M.GAME_STATE) == 0, limit=300)
+    lab.run_until(lambda lab: lab.peek(M.GAME_STATE) == 0, limit=300)
     record("the bat steals what you carry", game, game >= 6, lab.peek(M.CARRIED) == M.NOTHING)
     record("a monster in the next room is shown", game, game == 0, monster_shown(lab, start, room=3))
     record("a monster in your room is shown", game, True, monster_shown(lab, start, room=2))
@@ -279,7 +279,7 @@ def check_door_sound(lab, game, start):
     """Through door 0 (with the key, in case it's locked): is there a doorway or new-room sound?"""
     lab.load(start)
     lab.poke(M.CARRIED, KEY)
-    walk_until(lab, "left", lambda l: l.peek(M.POS_X) <= 0x74)
+    walk_until(lab, "left", lambda lab: lab.peek(M.POS_X) <= 0x74)
     heard = set()
     for _ in range(WALK_LIMIT):
         run(lab, 1, [JOY_DOWN])

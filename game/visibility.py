@@ -70,20 +70,20 @@ def stairs_visible(state):
     return (state.match_lit or state.lights_on) and state.stairs is not None
 
 
-def light_reach(state, xs, ys):
+def light_reach(state, floor_xs, floor_ys):
     """How far floor points are from the match, as a fraction of the light's reach: <= 1 is lit. Works on
     single numbers or numpy arrays. Points beyond the room's limits (games 2-9) are given infinity.
     (Walls block the light too - the look decides how to show that, since it draws the walls.)"""
     centre_x = state.player[0] + 4      # the middle of the 8-wide eyes
     centre_y = state.player[1] + 1
-    across = (np.asarray(xs, float) - centre_x) / LIGHT_HALF_WIDTH
-    up_down = (np.asarray(ys, float) - centre_y) / LIGHT_HALF_HEIGHT
+    across = (np.asarray(floor_xs, float) - centre_x) / LIGHT_HALF_WIDTH
+    up_down = (np.asarray(floor_ys, float) - centre_y) / LIGHT_HALF_HEIGHT
     reach = np.sqrt(across * across + up_down * up_down)
     if not state.match_lit:
         return np.full(np.shape(reach), np.inf)
     if state.dark:
         bottom, top = state.room_limits
-        outside = (np.asarray(ys) < bottom) | (np.asarray(ys) > top)
+        outside = (np.asarray(floor_ys) < bottom) | (np.asarray(floor_ys) > top)
         reach = np.where(outside, np.inf, reach)
     return reach
 

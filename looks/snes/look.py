@@ -208,10 +208,10 @@ def add_dust(picture, glow, frame_no):
     starts_x = rng.uniform(0, width, DUST_MOTES)
     starts_y = rng.uniform(0, height, DUST_MOTES)
     phases = rng.uniform(0, 2 * np.pi, DUST_MOTES)
-    xs = (starts_x + DUST_SWAY * np.sin(frame_no / 40 + phases)).astype(int) % width
-    ys = (starts_y + frame_no * DUST_DRIFT).astype(int) % height
+    floor_xs = (starts_x + DUST_SWAY * np.sin(frame_no / 40 + phases)).astype(int) % width
+    floor_ys = (starts_y + frame_no * DUST_DRIFT).astype(int) % height
     twinkle = 0.6 + 0.4 * np.sin(frame_no / 9 + phases)
-    picture[ys, xs] += DUST * (glow[ys, xs] * twinkle)[:, None]
+    picture[floor_ys, floor_xs] += DUST * (glow[floor_ys, floor_xs] * twinkle)[:, None]
 
 
 def add_rain(screen, frame_no):

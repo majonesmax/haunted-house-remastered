@@ -23,8 +23,8 @@ def decay(length, time_constant):
 
 def fade_in_out(length, rise, fall):
     """An envelope rising over `rise` seconds and falling over the last `fall`."""
-    t = np.arange(length) / RATE
-    return np.minimum(1, t / rise) * np.minimum(1, (length / RATE - t) / fall).clip(0, 1)
+    time = np.arange(length) / RATE
+    return np.minimum(1, time / rise) * np.minimum(1, (length / RATE - time) / fall).clip(0, 1)
 
 
 def filtered(signal, low_hz, high_hz, tilt=0.0):
@@ -56,8 +56,8 @@ def at(track, start, sound):
 # --- beds: loops ----------------------------------------------------------------------------------------
 def swell(cycles, depth, phase=0.0):
     """A slow rise and fall in loudness, a whole number of times a loop (so it loops too)."""
-    t = np.linspace(0, 1, seconds(LOOP_SECONDS), endpoint=False)
-    return (1 - depth + depth * (0.5 + 0.5 * np.sin(2 * np.pi * cycles * t + phase)))[:, None]
+    time = np.linspace(0, 1, seconds(LOOP_SECONDS), endpoint=False)
+    return (1 - depth + depth * (0.5 + 0.5 * np.sin(2 * np.pi * cycles * time + phase)))[:, None]
 
 
 def rain(seed, taps_a_second=30):
@@ -96,16 +96,16 @@ def ticking(track, pan):
 
 
 # --- one-offs -------------------------------------------------------------------------------------------
-def knock(hz, time_constant, length=None):
+def knock(pitch, time_constant, length=None):
     """A short knock at a pitch: a tick (high, short) or a thud (low, longer)."""
     length = length or seconds(time_constant * 8)
-    return np.sin(2 * np.pi * hz * np.arange(length) / RATE) * decay(length, time_constant)
+    return np.sin(2 * np.pi * pitch * np.arange(length) / RATE) * decay(length, time_constant)
 
 
-def wood(seed, hz, time_constant=0.025):
+def wood(seed, pitch, time_constant=0.025):
     """A knock on wood: a low note with the clack of the surface on top."""
     length = seconds(time_constant * 8)
-    body = knock(hz, time_constant, length) + 0.5 * knock(hz * 2.7, time_constant / 2, length)
+    body = knock(pitch, time_constant, length) + 0.5 * knock(pitch * 2.7, time_constant / 2, length)
     clack = filtered(noise(length, seed)[:, :1], 700, 3500)[:, 0] * decay(length, 0.004)
     return body + 0.6 * clack
 
@@ -127,12 +127,12 @@ def thunder(seed):
     rng = np.random.default_rng(seed)
     length = seconds(7)
     rumble = filtered(noise(length, seed), 30, 700, tilt=0.7)
-    t = np.arange(length) / RATE
+    time = np.arange(length) / RATE
     rolls = np.zeros(length)
     start = 0.0
     for roll in range(rng.integers(2, 4)):
         width = rng.uniform(0.6, 1.4)
-        rolls += np.exp(-((t - start - width) / width) ** 2) * 0.7 ** roll
+        rolls += np.exp(-((time - start - width) / width) ** 2) * 0.7 ** roll
         start += rng.uniform(0.8, 1.6)
     return rumble * (rolls * fade_in_out(length, 0.2, 1.5))[:, None]
 
@@ -144,10 +144,10 @@ def birdsong(seed):
     start = 0.0
     for _chirp in range(rng.integers(3, 7)):
         length = seconds(rng.uniform(0.05, 0.13))
-        t = np.arange(length) / RATE
+        time = np.arange(length) / RATE
         swoop = np.linspace(rng.uniform(2500, 4200), rng.uniform(2800, 5000), length)
-        trill = 1 + 0.06 * np.sin(2 * np.pi * rng.uniform(25, 45) * t)
-        chirp = np.sin(2 * np.pi * np.cumsum(swoop * trill) / RATE) * np.sin(np.pi * t / t[-1]) ** 2
+        trill = 1 + 0.06 * np.sin(2 * np.pi * rng.uniform(25, 45) * time)
+        chirp = np.sin(2 * np.pi * np.cumsum(swoop * trill) / RATE) * np.sin(np.pi * time / time[-1]) ** 2
         begin = seconds(start)
         phrase[begin:begin + length] += chirp[:len(phrase) - begin]
         start += rng.uniform(0.09, 0.22)
@@ -158,8 +158,8 @@ def drip(seed):
     """A drop into a puddle: a short plink that bends up."""
     rng = np.random.default_rng(seed)
     length = seconds(0.12)
-    hz = rng.uniform(900, 1600) * (1 + 0.6 * np.linspace(0, 1, length))
-    return np.sin(2 * np.pi * np.cumsum(hz) / RATE) * decay(length, 0.025)
+    pitch = rng.uniform(900, 1600) * (1 + 0.6 * np.linspace(0, 1, length))
+    return np.sin(2 * np.pi * np.cumsum(pitch) / RATE) * decay(length, 0.025)
 
 
 def floorboard(seed):
@@ -179,9 +179,9 @@ def moan(seed):
     """A low voice somewhere in the house: a breathy tone that sinks, wavering."""
     rng = np.random.default_rng(seed)
     length = seconds(rng.uniform(2.0, 3.0))
-    t = np.arange(length) / RATE
-    hz = rng.uniform(180, 260) * (1 - 0.25 * t / t[-1]) * (1 + 0.02 * np.sin(2 * np.pi * 5 * t))
-    tone = np.sin(2 * np.pi * np.cumsum(hz) / RATE)
+    time = np.arange(length) / RATE
+    pitch = rng.uniform(180, 260) * (1 - 0.25 * time / time[-1]) * (1 + 0.02 * np.sin(2 * np.pi * 5 * time))
+    tone = np.sin(2 * np.pi * np.cumsum(pitch) / RATE)
     breath = filtered(noise(length, seed)[:, :1], 300, 1200)[:, 0] * 0.4
     return (tone * 0.6 + breath) * fade_in_out(length, 0.6, 1.0)
 
@@ -213,8 +213,8 @@ def whisper(seed):
     rng = np.random.default_rng(seed)
     length = seconds(1.6)
     hiss = filtered(noise(length, seed)[:, :1], 2000, 6000)[:, 0]
-    t = np.arange(length) / RATE
-    syllables = np.clip(np.sin(2 * np.pi * rng.uniform(2.5, 4.0) * t), 0, 1) ** 2
+    time = np.arange(length) / RATE
+    syllables = np.clip(np.sin(2 * np.pi * rng.uniform(2.5, 4.0) * time), 0, 1) ** 2
     return hiss * syllables * fade_in_out(length, 0.3, 0.4)
 
 

@@ -68,7 +68,8 @@ def check_frame(scene, before, after):
                 fits[(after[S.EFFECT - 0x80], label)] += 1
             effects_heard[after[S.EFFECT - 0x80]] += 1
             return
-    problems.append((scene, {f"${a:02X}": (before[a - 0x80], after[a - 0x80]) for a in SOUND_BYTES}))
+    changed = {f"${address:02X}": (before[address - 0x80], after[address - 0x80]) for address in SOUND_BYTES}
+    problems.append((scene, changed))
 
 
 class Scene:
@@ -124,10 +125,10 @@ def scene_walls_and_doors(lab, start):
     """Game 2: game 1 makes no door sounds at all ($FCD1)."""
     lab.load(start)
     scene = Scene(lab, "bump-doorway-new-room")
-    scene.walk_until(JOY_LEFT, lambda l: l.peek(M.POS_X) <= 0x60)
+    scene.walk_until(JOY_LEFT, lambda lab: lab.peek(M.POS_X) <= 0x60)
     scene.run(20, [JOY_LEFT])                                  # bumping the middle wall
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.POS_X) >= 0x74)
-    scene.walk_until(JOY_DOWN, lambda l: l.peek(M.ROOM) == 0)  # doorway, then the new room
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.POS_X) >= 0x74)
+    scene.walk_until(JOY_DOWN, lambda lab: lab.peek(M.ROOM) == 0)  # doorway, then the new room
     scene.run(30)
     scene.save()
 
@@ -135,11 +136,11 @@ def scene_walls_and_doors(lab, start):
 def scene_stairs(lab, start):
     lab.load(start)
     scene = Scene(lab, "stairs-up-and-down")
-    scene.walk_until(JOY_LEFT, lambda l: l.peek(M.POS_X) <= 0x74)
-    scene.walk_until(JOY_DOWN, lambda l: l.peek(M.FLOOR) == 1)
+    scene.walk_until(JOY_LEFT, lambda lab: lab.peek(M.POS_X) <= 0x74)
+    scene.walk_until(JOY_DOWN, lambda lab: lab.peek(M.FLOOR) == 1)
     scene.run(70)
     scene.run(15, [JOY_UP])
-    scene.walk_until(JOY_DOWN, lambda l: l.peek(M.FLOOR) == 0)
+    scene.walk_until(JOY_DOWN, lambda lab: lab.peek(M.FLOOR) == 0)
     scene.run(70)
     scene.save()
 
@@ -147,7 +148,7 @@ def scene_stairs(lab, start):
 def scene_blocked(lab, start):
     lab.load(start)
     scene = Scene(lab, "blocked-by-a-locked-door")
-    scene.walk_until(JOY_LEFT, lambda l: l.peek(M.POS_X) <= 0x74)
+    scene.walk_until(JOY_LEFT, lambda lab: lab.peek(M.POS_X) <= 0x74)
     scene.run(60, [JOY_DOWN])
     scene.save()
 
@@ -163,7 +164,7 @@ def scene_items(lab, start):
     scene = Scene(lab, "pick-up-and-drop")
     place_item(lab, 1, 6, -2)
     scene.run(2, [BUTTON])
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.CARRIED) == 1, limit=30)
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.CARRIED) == 1, limit=30)
     scene.run(20)
     scene.run(15, [JOY_LEFT])
     scene.run(2, [BUTTON])
@@ -177,12 +178,12 @@ def scene_urn(lab, start):
     lab.poke(M.CARRIED, 2)
     place_item(lab, 3, 6, -2)
     scene.run(2, [BUTTON])
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.URN_SHAPES) == 5, limit=30)
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.URN_SHAPES) == 5, limit=30)
     scene.run(40)
     place_item(lab, 4, 6, -2)
     lab.poke(M.FLAGS, lab.peek(M.FLAGS) | 0x40)  # keep the match lit
     lab.poke(M.MATCH_TIME, 20)
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.URN_SHAPES) == 8, limit=40)
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.URN_SHAPES) == 8, limit=40)
     scene.run(60)
     scene.save()
 
@@ -193,7 +194,7 @@ def scene_win(lab, start):
     lab.poke(M.CARRIED, 2)
     for offset, shape in enumerate((8, 0xFF, 0xFF)):
         lab.poke(M.URN_SHAPES + offset, shape)
-    scene.walk_until(JOY_RIGHT, lambda l: l.peek(M.GAME_STATE) == S.WON, limit=60)
+    scene.walk_until(JOY_RIGHT, lambda lab: lab.peek(M.GAME_STATE) == S.WON, limit=60)
     first_frame = len(scene.audio)
     clock_at_start = lab.peek(M.CLOCK)
     scene.run(NOTE_FRAMES * 8)

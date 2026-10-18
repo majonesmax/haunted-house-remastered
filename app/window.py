@@ -300,9 +300,9 @@ class GameWindow:
         platforms = sorted(self.looks)
         platform = platforms[(platforms.index(self.look.platform) + 1) % len(platforms)]
         self.look = self.looks[platform]
-        on, paused = self.music.on, self.music.paused
+        playing, paused = self.music.on, self.music.paused
         self.music = self.players[platform]
-        self.music.on, self.music.paused = on, paused
+        self.music.on, self.music.paused = playing, paused
         self.music.playing = None  # pick up the moment afresh on the next frame
         self.sound.music = self.music
         pygame.display.set_caption(f"{paths.APP_NAME} - {self.look.name}")
@@ -322,8 +322,8 @@ class GameWindow:
     def toggle_lights(self):
         """O: the cheat - turn the lights on (everything on the floor shows), or off again."""
         self.lights_on = not self.lights_on
-        on = ["LIGHTS ON - A CHEAT.", "PICKING UP NEEDS A MATCH LIT.", "O AGAIN TURNS THEM OFF."]
-        self.show_note(on if self.lights_on else "LIGHTS OFF")
+        turned_on = ["LIGHTS ON - A CHEAT.", "PICKING UP NEEDS A MATCH LIT.", "O AGAIN TURNS THEM OFF."]
+        self.show_note(turned_on if self.lights_on else "LIGHTS OFF")
 
     def give_hint(self):
         """G: what you need next, and which way (game/hints.py) - the same until something changes."""
