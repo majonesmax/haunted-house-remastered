@@ -14,7 +14,8 @@ over four requests:
 
 ## The question
 
-The sister project, [Adventure Forever](https://github.com/majonesmax/adventure-forever), remasters *Adventure* without changing the game.
+The sister project, [Adventure Forever](https://github.com/majonesmax/adventure-forever), remasters *Adventure* without changing the game
+([how Adventure was worked out](https://github.com/majonesmax/adventure-forever/blob/main/docs/taking-it-apart.md)).
 The real game runs in the Stella emulator, and every frame the remaster reads the 2600's 128 bytes of RAM and
 draws the scene its own way. Graphics and maps are read from the player's own copy of the ROM. That only works
 if you know what every byte means. So the question was: **can we learn Haunted House well enough to do the
