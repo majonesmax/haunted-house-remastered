@@ -159,6 +159,20 @@ frame we read that RAM through the libretro API and draw our own picture from it
 plan and tables, read from your ROM at run time. The remasters can't change how the game plays, and what
 they show follows the original's own rules for what may be seen in the dark.
 
+A few things the original never had are added on top - the story, the hints (**G**), the notes when the urn
+comes together or taking something puts the rest down, the storm outside, the remastered sound effects, the
+ending, the lights-on cheat. Every one is worked out from the same RAM, between frames: the hints find the
+nearest piece in the item bytes and say which way; the sound effects come from what changed since the last
+frame (a match struck, a door, a pick-up). None of it reaches the game - the emulator is only ever read.
+The Python copies of the monster and sound code in `game/` are research, used to check that the RAM map is
+right; play never runs them.
+
+The one piece of the original's logic the remaster carries itself is what may be seen. The 2600 decides that
+inside its drawing code, as the picture is drawn, so nothing in RAM says whether an item is visible.
+`game/visibility.py` restates those rules in Python - the match's reach, monsters only in your room, walls only
+by lightning - checked against the original's own picture (`tools/verify_screen.py`), and it only ever
+decides what to draw, never what happens.
+
 | Folder | What's in it |
 |---|---|
 | `game/` | the game itself: the emulator, the RAM map, the ROM's tables, the game's state (`GameState`), the rules for what can be seen, a Python copy of the monster code |
