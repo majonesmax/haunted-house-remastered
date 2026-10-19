@@ -10,7 +10,7 @@ import os
 import sys
 
 APP_NAME = "Haunted House"
-APP_VERSION = "1.1.1"
+APP_VERSION = "1.1.2"
 FROZEN = getattr(sys, "frozen", False)
 if FROZEN:  # a packaged app: everything bundled is unpacked here
     ROOT: str = getattr(sys, "_MEIPASS")   # PyInstaller always sets it in a packaged app
