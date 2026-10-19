@@ -11,12 +11,16 @@ plays anywhere. (Adventure Forever's tools/make_video.py, for Haunted House.)
   4. Each piece renders separately; jumps between kept ranges dip through black, view switches cut straight;
      then one join, where the sound is encoded once.
 
-Usage: python tools/make_video.py recordings/<recording> [-o out.mp4]
+Usage: python tools/make_video.py recordings/<recording> [--edit reddit.json] [-o out.mp4]
 
-edit.json:
-  {"keep": [[from, to], ...],               seconds on the recording's clock (log.jsonl "t")
+edit.json (or another edit list in the recording's folder, named with --edit):
+  {"keep": [[from, to], ...],               seconds on the recording's clock (log.jsonl "t"); a third item,
+                                            a view ("both", "remaster", "2600", "grid"), shows that view
+                                            whatever the player chose - the look still follows the log
    "captions": [[at, seconds, "TEXT"], ...],   the font has A-Z 0-9 and  !',-./:<>?
    "title": [["TEXT", scale, [r, g, b], y], ...], "end": [...],    optional: the title and end cards
+   "title_seconds": 4, "end_seconds": 6,   optional: how long the cards stay up (0: none)
+   "dip": 0.25,                             optional: seconds of fade through black at a jump
    "audio_lead": 0.15}                      optional: how much later the sound is than the picture
 """
 
@@ -67,6 +71,10 @@ class Caption(NamedTuple):
     text: str
 
 
+Keep = tuple[float, float, str | None]   # a kept range: from, to (seconds), and the view it's shown in (None:
+                                         # the player's own)
+
+
 class Part(NamedTuple):
     start: float
     end: float
@@ -76,21 +84,26 @@ class Part(NamedTuple):
 
 
 class Edit(NamedTuple):
-    keep: list[tuple[float, float]]
+    keep: list[Keep]
     captions: list[Caption]
     title: list[Line]
     end: list[Line]
+    title_seconds: float
+    end_seconds: float
+    dip: float
     audio_lead: float
 
 
-def load_edit(recording: str) -> Edit:
-    with open(os.path.join(recording, "edit.json")) as edit_file:
+def load_edit(recording: str, name: str = "edit.json") -> Edit:
+    with open(os.path.join(recording, name)) as edit_file:
         edit: dict[str, Any] = json.load(edit_file)
     def lines(key: str, default: list[Line]) -> list[Line]:
         return [(text, scale, tuple(colour), y) for text, scale, colour, y in edit.get(key, default)]
-    return Edit(keep=[(start, end) for start, end in edit["keep"]],
-                captions=[Caption(*caption) for caption in edit.get("captions", [])],
+    keep: list[Keep] = [(kept[0], kept[1], kept[2] if len(kept) > 2 else None) for kept in edit["keep"]]
+    return Edit(keep=keep, captions=[Caption(*caption) for caption in edit.get("captions", [])],
                 title=lines("title", TITLE), end=lines("end", END),
+                title_seconds=edit.get("title_seconds", TITLE_SECONDS),
+                end_seconds=edit.get("end_seconds", END_SECONDS), dip=edit.get("dip", DIP),
                 audio_lead=edit.get("audio_lead", 0.15))
 
 
@@ -210,37 +223,39 @@ def resample(source: str, target: str, size: tuple[int, int], source_frames: np.
 
 
 # --- the plan: kept ranges, cut where the view changes -------------------------------------------------
-def layout_at(rows: list[dict[str, Any]], times: np.ndarray, moment: float) -> str:
+def layout_at(rows: list[dict[str, Any]], times: np.ndarray, moment: float, view: str | None = None) -> str:
+    """The layout at a moment: the player's view and look then, or `view` with the player's look."""
     row = rows[max(0, int(np.searchsorted(times, moment, side="right")) - 1)]
-    view, look = row["view"], row["look"]
-    return "2600" if view == "2600" else f"{view}_{look}"
+    shown, look = view or row["view"], row["look"]
+    return "2600" if shown == "2600" else f"{shown}_{look}"
 
 
-def plan(recording: str, keep: list[tuple[float, float]]) -> list[Part]:
+def plan(recording: str, keep: list[Keep]) -> list[Part]:
     """The kept ranges, split where the player switched view or look (a brief flash keeps the last)."""
     with open(os.path.join(recording, "log.jsonl")) as log:
         rows = [json.loads(line) for line in log]
     times = np.array([row["t"] for row in rows])
     parts = []
-    for start, end in keep:
-        pieces = merged_pieces(rows, times, start, end)
+    for start, end, view in keep:
+        pieces = merged_pieces(rows, times, (start, end), view)
         for index, (piece_start, piece_end, name) in enumerate(pieces):
             parts.append(Part(piece_start, piece_end, name, index == 0, index == len(pieces) - 1))
     return parts
 
 
-def merged_pieces(rows: list[dict[str, Any]], times: np.ndarray, start: float,
-                  end: float) -> list[tuple[float, float, str]]:
-    cuts, current = [start], layout_at(rows, times, start)
+def merged_pieces(rows: list[dict[str, Any]], times: np.ndarray, kept: tuple[float, float],
+                  view: str | None) -> list[tuple[float, float, str]]:
+    start, end = kept
+    cuts, current = [start], layout_at(rows, times, start, view)
     for moment in np.arange(start, end, 1 / FPS):
-        name = layout_at(rows, times, moment)
+        name = layout_at(rows, times, moment, view)
         if name != current:
             cuts.append(round(float(moment), 4))
             current = name
     cuts.append(end)
     pieces: list[tuple[float, float, str]] = []
     for piece_start, piece_end in zip(cuts, cuts[1:]):
-        name = layout_at(rows, times, piece_start + 1e-3)
+        name = layout_at(rows, times, piece_start + 1e-3, view)
         too_brief = piece_end - piece_start < MIN_PART
         if pieces and (too_brief or name == pieces[-1][2]):
             pieces[-1] = (pieces[-1][0], piece_end, pieces[-1][2])
@@ -272,7 +287,7 @@ def render_part(index: int, part: Part, streams: dict[str, str], recording: str,
         inputs += ["-loop", "1", "-t", f"{duration:.3f}", "-i", png]
     inputs += ["-ss", f"{part.start + edit.audio_lead:.3f}", "-t", f"{duration:.3f}",
                "-i", os.path.join(recording, "audio.wav")]
-    graph = filter_graph(placements, captions, part, duration)
+    graph = filter_graph(placements, captions, part, (duration, edit.dip))
     out = os.path.join(work, f"part_{index:03d}.mkv")
     run(["ffmpeg", "-v", "error", "-y", *inputs, "-filter_complex", graph, "-map", "[v]", "-map", "[a]",
          "-t", f"{duration:.3f}", "-r", str(FPS), "-c:v", "libx264", "-preset", "medium", "-crf", "16",
@@ -280,9 +295,11 @@ def render_part(index: int, part: Part, streams: dict[str, str], recording: str,
     return out
 
 
-def filter_graph(placements: list[Placement], captions: list[Caption], part: Part, duration: float) -> str:
+def filter_graph(placements: list[Placement], captions: list[Caption], part: Part,
+                 timing: tuple[float, float]) -> str:
     """ffmpeg's filter graph for a part: inputs are the background, the streams, the labels, the
-    captions and the sound, in that order."""
+    captions and the sound, in that order. timing: the part's length and the dip at a jump (seconds)."""
+    duration, dip = timing
     steps, last = [], "[0:v]"
     for number, (_stream, left, top, width, height) in enumerate(placements):
         steps.append(f"[{number + 1}:v]scale={width}:{height}:flags=neighbor,setpts=PTS-STARTPTS[s{number}]")
@@ -302,11 +319,11 @@ def filter_graph(placements: list[Placement], captions: list[Caption], part: Par
         steps.append(f"[{labels_input + 1 + number}:v]format=rgba{faded}[c{number}]")
         steps.append(f"{last}[c{number}]overlay=0:0:shortest=1[cc{number}]")
         last = f"[cc{number}]"
-    picture_fades = ([f"fade=t=in:st=0:d={DIP}"] if part.fade_in else []) + \
-                    ([f"fade=t=out:st={duration - DIP:.3f}:d={DIP}"] if part.fade_out else [])
+    picture_fades = ([f"fade=t=in:st=0:d={dip}"] if part.fade_in else []) + \
+                    ([f"fade=t=out:st={duration - dip:.3f}:d={dip}"] if part.fade_out else [])
     steps.append(f"{last}{','.join(picture_fades) or 'null'},format=yuv420p[v]")
     sound_in = labels_input + 1 + len(captions)
-    fade_in, fade_out = (DIP if part.fade_in else 0.03), (DIP if part.fade_out else 0.03)
+    fade_in, fade_out = (dip if part.fade_in else 0.03), (dip if part.fade_out else 0.03)
     steps.append(f"[{sound_in}:a]aresample=48000,asetpts=PTS-STARTPTS,afade=t=in:st=0:d={fade_in},"
                  f"afade=t=out:st={duration - fade_out:.3f}:d={fade_out}[a]")
     return ";".join(steps)
@@ -332,24 +349,30 @@ def card(lines: list[Line], seconds: float, path: str, work: str,
 def main() -> None:
     parser = argparse.ArgumentParser(description="Cut a video from a recording, following its edit.json.")
     parser.add_argument("recording")
+    parser.add_argument("--edit", default="edit.json", help="the edit list, in the recording's folder")
     parser.add_argument("-o", "--out")
     args = parser.parse_args()
     recording = args.recording.rstrip("/")
-    edit = load_edit(recording)
+    edit = load_edit(recording, args.edit)
     work = os.path.join(recording, "edit")
     os.makedirs(work, exist_ok=True)
     print("resampling the streams to a steady 60 fps...", flush=True)
     streams = steady_streams(recording, work)
     audio = os.path.join(recording, "audio.wav")
-    pieces = [card(edit.title, TITLE_SECONDS, os.path.join(work, "title.mkv"), work, sound=(audio, 0.0))]
+    pieces = []
+    if edit.title_seconds > 0:   # 0: straight into the game
+        pieces.append(card(edit.title, edit.title_seconds, os.path.join(work, "title.mkv"), work,
+                           sound=(audio, 0.0)))
     for index, part in enumerate(plan(recording, edit.keep)):
         print(f"part {index + 1}: {part.start:6.1f}-{part.end:6.1f} s  {part.layout}", flush=True)
         pieces.append(render_part(index, part, streams, recording, work, edit))
-    pieces.append(card(edit.end, END_SECONDS, os.path.join(work, "end.mkv"), work))
+    if edit.end_seconds > 0:     # 0: the game to the last frame (a video that loops)
+        pieces.append(card(edit.end, edit.end_seconds, os.path.join(work, "end.mkv"), work))
     listing = os.path.join(work, "parts.txt")
     with open(listing, "w") as parts_file:
         parts_file.writelines(f"file '{os.path.abspath(piece)}'\n" for piece in pieces)
-    out = args.out or os.path.join(recording, "haunted_house_remastered.mp4")
+    default_name = "haunted_house_remastered" + ("" if args.edit == "edit.json" else "_" + args.edit[:-5])
+    out = args.out or os.path.join(recording, default_name + ".mp4")
     run(["ffmpeg", "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", listing, "-c:v", "copy",
          "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", out])
     print(out)
