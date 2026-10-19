@@ -54,6 +54,7 @@ KEYS = {pygame.K_l: "next_look", pygame.K_d: "toggle_lightning", pygame.K_m: "to
 LEFT_DIFFICULTY_A, LEFT_DIFFICULTY_B = 10, 12  # the Stella core's buttons for the left switch (docs)
 SWITCH_FRAMES = 3                              # hold a switch button this long for the core to see it
 FPS = 60
+VSYNC_SLACK = 1.5               # Hz: a 59.94 Hz display paces a 60 fps game well enough
 FIT = 0.9                       # a view bigger than this much of the screen opens smaller (the grid)
 KEEP_WINDOW_IN_FULLSCREEN = sys.platform == "darwin"   # Windows needed a new window for each view
 NOTE_FRAMES = 120               # how long a message stays on screen
@@ -101,6 +102,7 @@ class GameWindow:
         self.state: GameState | None = None
         self.picture: Picture | None = None        # your look's screen this frame
         self.other_picture: Picture | None = None  # the other look's, when the grid or the recorder needs it
+        self.vsync_paces = False       # flip() waits for a ~60 Hz display's refresh, so the clock needn't
         self.screen = self.set_mode()
         threading.Thread(target=self.prepare_looks, daemon=True).start()
 
@@ -126,14 +128,14 @@ class GameWindow:
                 self.picture = self.loading_screen(loading_frames)
                 loading_frames += 1
                 self.show(loading=True)
-                clock.tick(FPS)
+                clock.tick(0 if self.vsync_paces else FPS)
                 continue
             self.sound.holding = False
             if not self.paused:
                 self.play_frame()
             self.show()
             self.note_frames = max(0, self.note_frames - 1)
-            clock.tick(FPS)
+            clock.tick(0 if self.vsync_paces else FPS)   # two waits, vsync's and the clock's, would stutter
         self.stop_recording()
         pygame.quit()
 
@@ -265,7 +267,7 @@ class GameWindow:
         into it. On macOS, fullscreen keeps its window whatever the view: a new window would leave
         fullscreen and come back, animated, on every V. Elsewhere, and out of fullscreen, each new size
         gets a new window: pygame-ce can crash or hang re-calling set_mode with SCALED (as Adventure
-        Forever found), and Windows needed it."""
+        Forever found), and Windows needed it. Vsync where the system offers it: no tearing."""
         pygame.display.set_caption(f"{paths.APP_NAME} - {self.look.name}")
         if self.fullscreen and KEEP_WINDOW_IN_FULLSCREEN and pygame.display.get_surface() is not None:
             return self.screen
@@ -279,7 +281,15 @@ class GameWindow:
         flags = pygame.SCALED | pygame.RESIZABLE
         if self.fullscreen and not KEEP_WINDOW_IN_FULLSCREEN:
             flags |= pygame.FULLSCREEN
-        return pygame.display.set_mode((int(width * shrink), int(height * shrink)), flags)
+        shown = (int(width * shrink), int(height * shrink))
+        try:
+            screen = pygame.display.set_mode(shown, flags, vsync=1)
+        except pygame.error as err:
+            print(f"vsync unavailable ({err}); expect some tearing", flush=True)
+            self.vsync_paces = False
+            return pygame.display.set_mode(shown, flags)
+        self.vsync_paces = display_near(FPS)
+        return screen
 
     # --- window commands -----------------------------------------------------------------------------
     def toggle_lightning(self) -> None:
@@ -384,6 +394,13 @@ def draw_cheat_mark(canvas: Picture) -> None:
     """While the lights are on: LIGHTS ON, top right, in amber - on the window, never in a recording."""
     words = "LIGHTS ON"
     hud.draw_text(canvas, words, canvas.shape[1] - hud.text_width(words) - 6, 6, AMBER)
+
+
+def display_near(fps: int) -> bool:
+    """Does the screen refresh at about `fps` times a second? (A 120 Hz screen doesn't: vsync would run the
+    game twice as fast, so the clock paces it instead.)"""
+    rates = pygame.display.get_desktop_refresh_rates()
+    return bool(rates) and abs(rates[0] - fps) < VSYNC_SLACK
 
 
 def draw_recording_light(canvas: Picture) -> None:

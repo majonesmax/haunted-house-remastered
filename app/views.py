@@ -3,6 +3,7 @@
     both       the remaster beside the 2600 original                         584 x 240
     remaster   the remaster alone                                            256 x 240
     2600       the original alone, at the TV's shape                         320 x 240
+               (its 160 x 228 picture at 320 x 228, never stretched, a thin bar above and below)
     grid       four panes, each 512 x 480: what you're playing (top left)   1024 x 960
                over the other look (bottom left), the 2600 (top right) over its live RAM (bottom right)
 
@@ -24,6 +25,7 @@ GridExtras = tuple[Picture, Picture | None, tuple[str, str]]   # the other look'
 
 VIEWS = ("both", "remaster", "2600", "grid")
 ORIGINAL_W = 320                # the 2600's 160 x 228 picture, shown at the TV's shape
+ORIGINAL_H = 228                # ...each line once: stretched to 240, one line in 19 would be drawn twice
 GAP = 8
 PANE_W, PANE_H = 512, 480       # a grid pane: a look's screen at twice its size
 DIVIDER: Rgb = (60, 60, 80)
@@ -45,12 +47,20 @@ def compose(view: str, playing: Picture, original: Picture,
     if view == "remaster":
         return playing
     if view == "2600":
-        return tv_shape(original, ORIGINAL_W, SCREEN_H)
+        return on_tv(original)
     if view == "both":
         gap = np.zeros((SCREEN_H, GAP, 3), np.uint8)
-        return np.concatenate([playing, gap, tv_shape(original, ORIGINAL_W, SCREEN_H)], axis=1)
+        return np.concatenate([playing, gap, on_tv(original)], axis=1)
     assert grid_extras is not None, "the grid needs the other look, the RAM pane and the names"
     return grid(playing, original, *grid_extras)
+
+
+def on_tv(original: Picture) -> Picture:
+    """The 2600's picture at the TV's shape, centred in the remaster's height."""
+    screen = np.zeros((SCREEN_H, ORIGINAL_W, 3), np.uint8)
+    top = (SCREEN_H - ORIGINAL_H) // 2
+    screen[top:top + ORIGINAL_H] = tv_shape(original, ORIGINAL_W, ORIGINAL_H)
+    return screen
 
 
 def tv_shape(frame: Picture, width: int, height: int) -> Picture:
@@ -63,8 +73,8 @@ def grid(playing: Picture, original: Picture, other: Picture, ram_pane: Picture 
     canvas = np.zeros((2 * PANE_H, 2 * PANE_W, 3), np.uint8)
     double_into(canvas[:PANE_H, :PANE_W], playing)
     double_into(canvas[PANE_H:, :PANE_W], other)
-    scale = min(PANE_W / ORIGINAL_W, PANE_H / 228)          # the 2600 picture, as big as fits, centred
-    width, height = int(ORIGINAL_W * scale), int(228 * scale)
+    scale = min(PANE_W / ORIGINAL_W, PANE_H / ORIGINAL_H)   # the 2600 picture, as big as fits, centred
+    width, height = int(ORIGINAL_W * scale), int(ORIGINAL_H * scale)
     left, top = PANE_W + (PANE_W - width) // 2, (PANE_H - height) // 2
     canvas[top:top + height, left:left + width] = tv_shape(original, width, height)
     if ram_pane is not None:   # none until the first frame has been read
