@@ -303,7 +303,13 @@ def random_floor(state: State, rom: bytes) -> int:
 # --- a new game ($F082) ------------------------------------------------------------------------------
 FOUR_FLOORS_MASK, EIGHT_FLOORS_MASK = 3, 7
 GAME_3 = 2
-GAME_3_KEY = (0, 0x74, 0x84)  # in game 3 the master key starts beside the player
+GAME_3_KEY = (0, 0x74, 0x84)  # in game 3 the master key starts beside the player (floor, x, y)
+
+
+def game_3_key(rom: bytes) -> tuple[int, int, int]:
+    """Where game 3 puts the master key: beside the player, on the floor with the front door."""
+    _floor, x, y = GAME_3_KEY
+    return R.ground_floor(rom), x, y
 
 
 def top_floor(rom: bytes) -> int:
@@ -316,7 +322,7 @@ def new_game(state: State, rom: bytes) -> None:
     the monsters (the player is in room 2 of the first floor), send the ghost to the top floor, then put
     each item where the monster with the same number starts."""
     state[RANDOM_LOW], state[RANDOM_HIGH] = state[RANDOM_HIGH], state[RANDOM_LOW]
-    state[M.FLOOR], state[M.ROOM] = 0, R.FRONT_DOOR_ROOM
+    state[M.FLOOR], state[M.ROOM] = R.ground_floor(rom), R.FRONT_DOOR_ROOM
     scatter(state, rom)
     state[M.MONSTER_FLOOR + GHOST] = top_floor(rom)
     for number in range(5):
@@ -324,4 +330,4 @@ def new_game(state: State, rom: bytes) -> None:
         state[M.ITEM_X + number] = state[M.MONSTER_X + number]
         state[M.ITEM_Y + number] = state[M.MONSTER_Y + number]
     if state[M.GAME_NUMBER] == GAME_3:
-        state[M.ITEM_FLOOR], state[M.ITEM_X], state[M.ITEM_Y] = GAME_3_KEY
+        state[M.ITEM_FLOOR], state[M.ITEM_X], state[M.ITEM_Y] = game_3_key(rom)

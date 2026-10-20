@@ -102,17 +102,27 @@ BY_FLOOR_AND_GAME = ("LOCKED_DOORS", "STAIRS_HERE", "STAIRS_GO_UP")
 
 class Floors(bytes):
     """A mansion of its own, in place of the ROM (as bytes, it's the first floor's image): `images`, one
-    ROM-shaped image per floor with that floor's plan in its PER_FLOOR tables, and `by_floor_and_game`,
-    the BY_FLOOR_AND_GAME tables for all its floors (games 1-8, then game 9's)."""
+    ROM-shaped image per floor with that floor's plan in its PER_FLOOR tables; `by_floor_and_game`, the
+    BY_FLOOR_AND_GAME tables for all its floors (games 1-8, then game 9's); and `ground_floor`, the floor
+    with the front door, where a new game starts (the original's is its bottom floor, 0; a mansion with a
+    cellar has floors below it)."""
 
     images: list[bytes]
     by_floor_and_game: dict[str, bytes]
+    ground_floor: int
 
-    def __new__(cls, images: list[bytes], by_floor_and_game: dict[str, bytes]) -> "Floors":
+    def __new__(cls, images: list[bytes], by_floor_and_game: dict[str, bytes],
+                ground_floor: int = 0) -> "Floors":
         made = super().__new__(cls, images[0])
         made.images = images
         made.by_floor_and_game = by_floor_and_game
+        made.ground_floor = ground_floor
         return made
+
+
+def ground_floor(rom: bytes) -> int:
+    """The floor with the front door, where a new game starts: 0 in the original."""
+    return rom.ground_floor if isinstance(rom, Floors) else 0
 
 
 def floor_count(rom: bytes) -> int:

@@ -140,13 +140,14 @@ class PlayerBot(Bot):
         RESET's frame, over the eyes at the start: caught at once."""
         if self.lab.peek(M.GAME_STATE) != P.PLAYING:
             return
-        state = self.moved_to(P.FRONT_DOOR_FLOOR, R.FRONT_DOOR_ROOM, (P.START_X - 0x18, P.START_Y))
+        ground = R.ground_floor(self.rom)
+        state = self.moved_to(ground, R.FRONT_DOOR_ROOM, (P.START_X - 0x18, P.START_Y))
         state[M.CARRIED] = P.SCEPTER
         P.match_out(state)
         for monster in range(5):
-            state[M.MONSTER_FLOOR + monster] = P.FRONT_DOOR_FLOOR + 2
+            state[M.MONSTER_FLOOR + monster] = (ground + 2) % R.floor_count(self.rom)
         ghost = monsters.GHOST
-        state[M.MONSTER_FLOOR + ghost], state[M.MONSTER_ROOM + ghost] = P.FRONT_DOOR_FLOOR, R.FRONT_DOOR_ROOM
+        state[M.MONSTER_FLOOR + ghost], state[M.MONSTER_ROOM + ghost] = ground, R.FRONT_DOOR_ROOM
         state[M.MONSTER_X + ghost], state[M.MONSTER_Y + ghost] = P.START_X, P.START_Y
         state[M.MONSTER_ROUTE + ghost] = R.FRONT_DOOR_ROOM
         self.poke_all(state)
@@ -217,7 +218,7 @@ class PlayerBot(Bot):
         """The whole urn in hand, at the start position beside the front door; then walk out."""
         if self.lab.peek(M.GAME_STATE) != P.PLAYING:
             return
-        state = self.moved_to(P.FRONT_DOOR_FLOOR, R.FRONT_DOOR_ROOM, (P.START_X, P.START_Y))
+        state = self.moved_to(R.ground_floor(self.rom), R.FRONT_DOOR_ROOM, (P.START_X, P.START_Y))
         state[M.URN_SHAPES], state[M.URN_SHAPES + 1], state[M.URN_SHAPES + 2] = P.WHOLE_URN, 0xFF, 0xFF
         state[M.CARRIED] = P.URN
         self.poke_all(state)

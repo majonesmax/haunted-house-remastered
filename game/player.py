@@ -45,7 +45,7 @@ NOTHING = 0xFF
 KEY, SCEPTER, URN = 0, 1, 2
 WHOLE_URN, JOINED = 8, 0xFF
 BAT = 1
-FRONT_DOOR_FLOOR = 0
+FRONT_DOOR_FLOOR = 0      # the original's (a mansion of its own: rom.ground_floor)
 MATCH_SECONDS = 20
 FRAMES_PER_SECOND = 60
 SELECT_REPEAT = 45        # frames between game numbers while SELECT is held
@@ -158,6 +158,7 @@ def new_game(state: State, rom: bytes) -> None:
         state[address] = 0
     for offset, value in enumerate(R.table(rom, "NEW_GAME")):
         state[M.LIVES + offset] = value
+    state[M.FLOOR] = R.ground_floor(rom)   # (cleared to 0 above: the original's front door is on floor 0)
     monsters.scatter(state, rom)
     state[M.MONSTER_FLOOR + monsters.GHOST] = monsters.top_floor(rom)
     for number in range(5):
@@ -165,7 +166,7 @@ def new_game(state: State, rom: bytes) -> None:
         state[M.ITEM_X + number] = state[M.MONSTER_X + number]
         state[M.ITEM_Y + number] = state[M.MONSTER_Y + number]
     if state[M.GAME_NUMBER] == GAME_3:
-        state[M.ITEM_FLOOR], state[M.ITEM_X], state[M.ITEM_Y] = GAME_3_KEY
+        state[M.ITEM_FLOOR], state[M.ITEM_X], state[M.ITEM_Y] = monsters.game_3_key(rom)
     room_changed(state, rom)
     five_monsters = state[M.GAME_NUMBER] >= FIRST_FIVE_MONSTER_GAME
     state[M.LAST_MONSTER] = 4 if five_monsters else 2
@@ -252,7 +253,7 @@ def eyes_line(y: int) -> int:
 
 # --- the front door and the match ($F155) ------------------------------------------------------------
 def front_door_and_match(state: State, rom: bytes) -> None:
-    at_front_door = state[STAIRS] & AT_EDGE and state[M.FLOOR] == FRONT_DOOR_FLOOR \
+    at_front_door = state[STAIRS] & AT_EDGE and state[M.FLOOR] == R.ground_floor(rom) \
         and state[M.ROOM] == R.FRONT_DOOR_ROOM
     if at_front_door:
         if state[M.CARRIED] == URN and state[M.URN_SHAPES] == WHOLE_URN:

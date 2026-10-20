@@ -16,7 +16,6 @@ URN_PIECES = (2, 3, 4)          # item numbers
 PIECES_IN = {2: 1, 3: 1, 4: 1, 5: 2, 6: 2, 7: 2, 8: 3}   # an urn shape -> how many pieces it is
 JOINED = 0xFF                   # a piece joined into another: it isn't anywhere by itself
 OTHER_FLOOR = 1000              # how far another floor counts, against distances across one (up to ~400)
-FRONT_DOOR_FLOOR = 0
 WHOLE_URN_NOTE = ["THE URN IS WHOLE!", "NOW GET IT OUT OF THE", "FRONT DOOR - FLOOR 1, RIGHT."]
 
 
@@ -25,7 +24,7 @@ def hint(state: GameState, rom: bytes) -> list[str]:
     if state.mode != "playing":
         return ["PRESS ENTER TO START.", "TAB CHOOSES THE GAME (1-9)."]
     if holding_whole_urn(state):
-        return get_out(state)
+        return get_out(state, rom)
     aim = nearest_urn(state)
     if aim is None:
         return ["NOTHING LEFT TO FIND."]
@@ -39,12 +38,13 @@ def holding_whole_urn(state: GameState) -> bool:
     return state.carried is not None and state.items[state.carried].shape == WHOLE_URN
 
 
-def get_out(state: GameState) -> list[str]:
+def get_out(state: GameState, rom: bytes) -> list[str]:
     """With the whole urn: out of the front door, and which way."""
     lines = ["YOU HAVE THE URN! GET OUT NOW!"]
-    if state.floor == FRONT_DOOR_FLOOR and state.room == R.FRONT_DOOR_ROOM:
+    front_door_floor = R.ground_floor(rom)
+    if state.floor == front_door_floor and state.room == R.FRONT_DOOR_ROOM:
         return lines + ["WALK OUT OF THIS ROOM'S", "RIGHT-HAND EDGE."]
-    return lines + ["THE FRONT DOOR IS", way(state, FRONT_DOOR_FLOOR, R.FRONT_DOOR_ROOM)]
+    return lines + ["THE FRONT DOOR IS", way(state, front_door_floor, R.FRONT_DOOR_ROOM)]
 
 
 def take_it(state: GameState, aim: Item) -> list[str]:
