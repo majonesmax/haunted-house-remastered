@@ -59,8 +59,8 @@ def controls_for(held: list[int]) -> P.Controls:
 class PlayerBot(Bot):
     """The monster check's bot, with scenes for the player's side of the game."""
 
-    def __init__(self, lab: Lab, seed: int):
-        super().__init__(lab, seed)
+    def __init__(self, lab: Lab, seed: int, rom: bytes | None = None):
+        super().__init__(lab, seed, rom)
         self.queued: list[list[int]] = []     # inputs already decided, one list per frame
         self.heading_out = False             # walking the whole urn out of the front door
         self.game = lab.peek(M.GAME_NUMBER)  # the game to go back to after a game over or a crash
@@ -161,7 +161,7 @@ class PlayerBot(Bot):
         if lab.peek(M.GAME_STATE) != P.PLAYING or lab.peek(M.LAST_MONSTER) < 4 or not rooms:
             return
         room = self.dice.choice(rooms)
-        state = self.moved_to(floor, room, R.room_centre(self.rom, room))
+        state = self.moved_to(floor, room, R.room_centre(self.rom, room, floor))
         state[M.GAME_STATE], state[M.DEATH_TIMER] = P.DYING, 100
         state[M.FLAGS] |= P.MATCH_LIT
         state[M.MATCH_TIME] = P.MATCH_SECONDS
@@ -233,7 +233,7 @@ class PlayerBot(Bot):
         if lab.peek(M.GAME_STATE) != P.PLAYING or not rooms:
             return
         room = self.dice.choice(rooms)
-        self.poke_all(self.moved_to(floor, room, R.room_centre(self.rom, room)))
+        self.poke_all(self.moved_to(floor, room, R.room_centre(self.rom, room, floor)))
         if self.dice.random() < 0.5:
             self.send_monster()
         self.errand = [self.waypoint(13 + room)]
@@ -261,7 +261,7 @@ class Tally:
 
 def check_game(lab: Lab, rom: bytes, game: int, frames: int, seed: int, tally: Tally) -> None:
     choose_game(lab, game)
-    bot = PlayerBot(lab, seed=seed * 1000 + game)
+    bot = PlayerBot(lab, seed=seed * 1000 + game, rom=rom)
     after_crash = False          # the RAM may be left corrupt: don't compare until a new game
     for frame in range(frames):
         held = bot.before_frame(frame)

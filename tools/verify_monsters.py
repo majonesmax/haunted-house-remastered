@@ -78,9 +78,9 @@ class Bot:
     hundred frames it calls a monster over and runs an errand - out through a door or up the stairs - so the
     monster has the chance to follow."""
 
-    def __init__(self, lab: Lab, seed: int):
+    def __init__(self, lab: Lab, seed: int, rom: bytes | None = None):
         self.lab = lab
-        self.rom = R.load()
+        self.rom = rom if rom is not None else R.load()   # (or a port's own mansion: an R.Floors)
         self.dice = random.Random(seed)
         self.stick: int | None = None
         self.frames_left = 0
@@ -117,19 +117,21 @@ class Bot:
         """Plan a way out of the room: its centre, then a door or the stairs, then a bit beyond."""
         room, floor = self.lab.peek(M.ROOM), self.lab.peek(M.FLOOR)
         exits: list[list[Point]] = []
-        for direction, (kind, number) in R.room_exits(self.rom, room).items():
+        for direction, (kind, number) in R.room_exits(self.rom, room, floor).items():
             if kind == "door" and number is not None:
                 beyond = room + R.table(self.rom, "ROOM_STEP")[R.DIRECTIONS.index(direction)]
-                exits.append([self.waypoint(6 + number), R.room_centre(self.rom, beyond % 256)])
+                exits.append([self.waypoint(6 + number), R.room_centre(self.rom, beyond % 256, floor)])
             elif kind == "edge" and room in R.stairs(self.rom, floor, self.lab.peek(M.GAME_NUMBER)):
                 exits.append([self.waypoint(13 + room)])
-        self.errand = [R.room_centre(self.rom, room)] + self.dice.choice(exits) if exits else []
+        self.errand = [R.room_centre(self.rom, room, floor)] + self.dice.choice(exits) if exits else []
         self.errand_frames = 600
         if self.dice.random() < 0.5:  # with the scepter, monsters stay near without catching the player
             self.lab.poke(M.CARRIED, model.SCEPTER)
 
     def waypoint(self, index: int) -> Point:
-        return R.table(self.rom, "WAYPOINT_X")[index], R.table(self.rom, "WAYPOINT_Y")[index]
+        """A waypoint on the player's floor."""
+        floor = self.lab.peek(M.FLOOR)
+        return R.table(self.rom, "WAYPOINT_X", floor)[index], R.table(self.rom, "WAYPOINT_Y", floor)[index]
 
     def walk_errand(self) -> list[int]:
         """Push the stick towards the next waypoint (diagonally if need be); give up after a while."""
@@ -159,7 +161,7 @@ class Bot:
         lab.poke(M.MONSTER_FLOOR + monster, lab.peek(M.FLOOR))
         lab.poke(M.MONSTER_ROOM + monster, room)
         lab.poke(M.MONSTER_ROUTE + monster, room)
-        centre_x, centre_y = R.room_centre(R.load(), room)
+        centre_x, centre_y = R.room_centre(self.rom, room, lab.peek(M.FLOOR))
         lab.poke(M.MONSTER_X + monster, centre_x)
         lab.poke(M.MONSTER_Y + monster, centre_y)
 
