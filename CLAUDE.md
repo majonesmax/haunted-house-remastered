@@ -7,7 +7,8 @@ Atari 2600 *Haunted House* runs unmodified in the Stella emulator; every frame, 
 read and the scene is redrawn. It's the sister project of
 [Adventure Forever](https://github.com/majonesmax/adventure-forever) (`../adventure-nes` beside this one, if you
 have it), which it copies its generic pieces from. How the game was worked out:
-[docs/taking-it-apart.md](docs/taking-it-apart.md); how the code fits together:
+[docs/taking-it-apart.md](docs/taking-it-apart.md); the whole game as rules, for ports:
+[docs/spec.md](docs/spec.md) (and as code: `game/player.py`); how the code fits together:
 [docs/architecture.md](docs/architecture.md); everything else: [docs/README.md](docs/README.md).
 
 ## The words

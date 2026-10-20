@@ -88,7 +88,8 @@ RAM = {
     0x97: ("ROOM_BEYOND", "while in a doorway, the room on the other side; $FF otherwise", "live"),
     0x98: ("MOOD_PITCH", "the monster-near noise: wanders while a monster is in your room, drifts back "
                          "to $7F (silent) after; lower = louder", "live"),
-    0x99: ("GAME_STATE", "$00 playing, $01 dying, $02 one frame after RESET, $40 game over / game select, "
+    0x99: ("GAME_STATE", "$00 playing, $01 dying, $02 while RESET is handled (cleared again before the "
+                          "frame ends), $40 game over / game select, "
                          "$44 won", "live"),
     0x9A: ("CARRIED", "item carried: 0 master key, 1 scepter, 2-4 urn pieces; $FF = nothing", "live"),
     0x9B: ("STAIRS", "low 4 bits: this room's stairs ($F = none; bits 0-1 edge, bit 2 = going up); "

@@ -130,9 +130,17 @@ confidence.
 - **The screen and the sound:** where everything is drawn, what each game lets you see, the switches, every
   sound effect, and the win tune's notes measured in the real audio. See
   [screen-and-sound.md](screen-and-sound.md).
+- **Everything else, as one frame:** `game/player.py` is the whole game in Python - moving, doors, stairs,
+  the match, the button, what's drawn, touching (worked out from the pictures, scanline by scanline, as the
+  2600's hardware does), the urn, dropping, dying and winning - calling the monster and sound models where
+  the game does. `tools/verify_player.py` plays all nine games beside it and it predicts every byte of the
+  state, every frame: 449,945 frames over five runs. It found three things nobody had written down: on
+  RESET's frame an invisible monster left from the frame before can catch the new game's player at once;
+  in games 1-5 the button is read twice on the frame you take the stairs; and the game can crash, running
+  its own RAM as code. [spec.md](spec.md) is all of it as rules, for anyone porting the game.
 
 What's left unchecked is small, and says why: two blocks the kernel places in the middle wall's gap that
-never show in play, and the B&W palette.
+never show in play, the B&W palette, and the PAL cartridge.
 
 ## How this compares with the disassembly
 

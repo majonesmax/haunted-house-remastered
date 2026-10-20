@@ -16,6 +16,8 @@ checked against the running game.
 
 - **[How we took Haunted House apart](taking-it-apart.md)**: start here. How the game was worked out, the
   methods and why, what went wrong, and how it compares with the commented disassembly.
+- **[A specification for ports](spec.md)**: the whole game as rules, frame by frame, each marked by how sure
+  we are - for rebuilding it elsewhere.
 - **[What's in the ROM](rom-elements.md)**: everything in the ROM, grouped by look, world, cast and rules.
 - **[The screen, the switches and the sound](screen-and-sound.md)**: where everything is drawn, what each
   game shows, the switches, and every sound - with the emulator's frame blending explained.

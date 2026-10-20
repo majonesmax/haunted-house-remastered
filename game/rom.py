@@ -198,6 +198,9 @@ def sprite_rows(rom: bytes, address: int, height: int) -> list[str]:
     return ["".join("#" if byte & 0x80 >> bit else "." for bit in range(8)) for byte in reversed(data)]
 
 
+ITEM_SPRITES_PAGE = 0xFE   # the high byte of every item picture's address
+
+
 def item_sprite_address(shape_or_item: int) -> int:
     """Sprite address for item 0 (key), 1 (scepter), or an urn shape 2-8 (see URN_SHAPES)."""
     return 0xFE08 + shape_or_item * 8
