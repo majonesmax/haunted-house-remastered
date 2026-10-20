@@ -18,7 +18,7 @@ The world's pictures, by name (any can be left out):
                       decor<n>_<kind>_left / _right / _up / _down / _centre: its eyes follow the player.
                       decor<n>_<kind>_lightning: what it looks like in a lightning flash (a window).
     decor<n>          (older packs) decorations as frames of one picture, each a kind
-    front_door        the front door, in the right-hand frame of the middle row of floor 1
+    front_door        the front door, in the right-hand frame of the middle row of the ground floor
 """
 
 from typing import TYPE_CHECKING, Any, NamedTuple
@@ -84,7 +84,7 @@ class Scene:
         shade_below_faces(full, faces, self.walls, look)
         kinds = decoration_kinds(world, number)
         self.decorations: list[Decoration] = decorate(full, faces, kinds, floor, look)
-        if floor == 0 and world.get("front_door"):
+        if floor == R.ground_floor(look.rom) and world.get("front_door"):
             draw_front_door(full, self.walls, look.adapt_scenery(world.must("front_door")[0]))
         self.full: Picture = full
         self.dim: Picture = look.dimmed(full)
@@ -255,8 +255,8 @@ def eyes_toward(decoration: Decoration, player_pixel: tuple[float, float]) -> st
 
 
 def draw_front_door(full: Picture, walls: Mask, door: Picture) -> None:
-    """The front door in the right-hand frame of the middle row, on the first floor. It shows wherever the
-    walls do."""
+    """The front door in the right-hand frame of the middle row, on the ground floor (the original's floor 1;
+    a mansion with a cellar has floors below it). It shows wherever the walls do."""
     top = cell_top(MIDDLE_ROW)
     door_x = VIEW_W - door.shape[1]
     door_y = top + (CELL_H - door.shape[0]) // 2
