@@ -127,15 +127,15 @@ def chase_point(state: State, rom: bytes, monster: int) -> Point:
     return x, y
 
 
-def waypoint(rom: bytes, route: int) -> Point:
+def waypoint(rom: bytes, route: int, floor: int = 0) -> Point:
     kind = (route & 0x3F) >> 4
     index = R.table(rom, "WAYPOINT_START")[kind] + (route & 0x0F)
-    return R.table(rom, "WAYPOINT_X")[index], R.table(rom, "WAYPOINT_Y")[index]
+    return R.table(rom, "WAYPOINT_X", floor)[index], R.table(rom, "WAYPOINT_Y", floor)[index]
 
 
 def route_point(state: State, rom: bytes, monster: int) -> Point | None:
     """The waypoint of the monster's plan; if it's already there, mark it arrived and stand still."""
-    target = waypoint(rom, state[M.MONSTER_ROUTE + monster])
+    target = waypoint(rom, state[M.MONSTER_ROUTE + monster], state[M.MONSTER_FLOOR + monster])
     here = state[M.MONSTER_X + monster], state[M.MONSTER_Y + monster]
     if here == target:
         state[0x95] |= bit(monster)
@@ -204,22 +204,22 @@ def pick_direction(state: State, rom: bytes, monster: int) -> None:
             return
 
 
-def floor_index(state: State, floor: int) -> int:
-    return floor + 4 if state[M.GAME_NUMBER] == R.GAME_9 else floor
+def floor_index(state: State, rom: bytes, floor: int) -> int:
+    return R.game_index(rom, floor, state[M.GAME_NUMBER])
 
 
 def try_direction(state: State, rom: bytes, monster: int, direction: int) -> bool:
     """Set a plan to leave the room this way, if the monster may; return whether it did ($FA1F)."""
     room = state[M.MONSTER_ROOM + monster]
     floor = state[M.MONSTER_FLOOR + monster]
-    neighbour = R.table(rom, "DOOR_IDS")[room * 4 + direction]
+    neighbour = R.table(rom, "DOOR_IDS", floor)[room * 4 + direction]
     if neighbour == WALL:
         return False
     if neighbour & EDGE:
-        index = floor_index(state, floor)
+        index = floor_index(state, rom, floor)
         if not R.table(rom, "STAIRS_HERE")[index] & bit(room):
             return False
-        going_up = R.byte_at(rom, R.TABLES["STAIRS_GO_UP"][0] + index) & bit(room)
+        going_up = R.table(rom, "STAIRS_GO_UP")[index] & bit(room)
         kind, target = (KIND_STAIRS_UP if going_up else KIND_STAIRS_DOWN), room
     else:
         if door_locked(state, rom, floor, neighbour) and not may_pass_locks(state, monster):
@@ -232,7 +232,7 @@ def try_direction(state: State, rom: bytes, monster: int, direction: int) -> boo
 def door_locked(state: State, rom: bytes, floor: int, door: int) -> bool:
     if state[M.GAME_NUMBER] < LOCKS_FROM_GAME:
         return False
-    return R.table(rom, "LOCKED_DOORS")[floor_index(state, floor)] & bit(door) != 0
+    return R.table(rom, "LOCKED_DOORS")[floor_index(state, rom, floor)] & bit(door) != 0
 
 
 def may_pass_locks(state: State, monster: int) -> bool:
@@ -245,7 +245,7 @@ def follow_through_door(state: State, rom: bytes, room: int, direction: int) -> 
     door only the ghost follows."""
     if state[M.GAME_NUMBER] < FOLLOW_FROM_GAME:
         return
-    door = R.table(rom, "DOOR_IDS")[room * 4 + direction]
+    door = R.table(rom, "DOOR_IDS", state[M.FLOOR])[room * 4 + direction]
     plan = direction << 6 | KIND_DOOR << 4 | door
     followers = [GHOST] if door_locked(state, rom, state[M.FLOOR], door) else None
     send_followers(state, room, plan, followers)
@@ -279,20 +279,36 @@ def scatter(state: State, rom: bytes) -> None:
     while base >= R.ROOM_COUNT:
         base = next_random(state) & 7
     for monster in range(4, -1, -1):
-        floor = next_random(state) & 3
+        floor = random_floor(state, rom)
         state[M.MONSTER_FLOOR + monster] = floor
         room = (monster + base) % R.ROOM_COUNT
         if room == state[M.ROOM] and floor == state[M.FLOOR]:
             room = (5 + base) % R.ROOM_COUNT
         state[M.MONSTER_ROOM + monster] = room
         state[M.MONSTER_ROUTE + monster] = room
-        state[M.MONSTER_X + monster], state[M.MONSTER_Y + monster] = R.room_centre(rom, room)
+        state[M.MONSTER_X + monster], state[M.MONSTER_Y + monster] = R.room_centre(rom, room, floor)
+
+
+def random_floor(state: State, rom: bytes) -> int:
+    """Four floors: the random number's bottom two bits, as the original. A mansion of more (up to 8): its
+    bottom three, tried again until it's a floor."""
+    floors = R.floor_count(rom)
+    mask = FOUR_FLOORS_MASK if floors <= 4 else EIGHT_FLOORS_MASK
+    floor = next_random(state) & mask
+    while floor >= floors:
+        floor = next_random(state) & mask
+    return floor
 
 
 # --- a new game ($F082) ------------------------------------------------------------------------------
-GHOST_START_FLOOR = 3        # the ghost always starts on the top floor ($F0A1 forces it after scattering)
+FOUR_FLOORS_MASK, EIGHT_FLOORS_MASK = 3, 7
 GAME_3 = 2
 GAME_3_KEY = (0, 0x74, 0x84)  # in game 3 the master key starts beside the player
+
+
+def top_floor(rom: bytes) -> int:
+    """Where the ghost always starts: the top floor ($F0A1 puts it there after scattering)."""
+    return R.floor_count(rom) - 1
 
 
 def new_game(state: State, rom: bytes) -> None:
@@ -302,7 +318,7 @@ def new_game(state: State, rom: bytes) -> None:
     state[RANDOM_LOW], state[RANDOM_HIGH] = state[RANDOM_HIGH], state[RANDOM_LOW]
     state[M.FLOOR], state[M.ROOM] = 0, R.FRONT_DOOR_ROOM
     scatter(state, rom)
-    state[M.MONSTER_FLOOR + GHOST] = GHOST_START_FLOOR
+    state[M.MONSTER_FLOOR + GHOST] = top_floor(rom)
     for number in range(5):
         state[M.ITEM_FLOOR + number] = state[M.MONSTER_FLOOR + number]
         state[M.ITEM_X + number] = state[M.MONSTER_X + number]

@@ -159,7 +159,7 @@ def new_game(state: State, rom: bytes) -> None:
     for offset, value in enumerate(R.table(rom, "NEW_GAME")):
         state[M.LIVES + offset] = value
     monsters.scatter(state, rom)
-    state[M.MONSTER_FLOOR + monsters.GHOST] = monsters.GHOST_START_FLOOR
+    state[M.MONSTER_FLOOR + monsters.GHOST] = monsters.top_floor(rom)
     for number in range(5):
         state[M.ITEM_FLOOR + number] = state[M.MONSTER_FLOOR + number]
         state[M.ITEM_X + number] = state[M.MONSTER_X + number]
@@ -209,7 +209,7 @@ def move_across(state: State, rom: bytes) -> None:
     state[STEP_X] = step
     if x == limit:
         reach_edge(state, rom)
-    elif R.wall_at(rom, probe_x, y + 2) or R.wall_at(rom, probe_x, y):
+    elif R.wall_at(rom, probe_x, y + 2, state[M.FLOOR]) or R.wall_at(rom, probe_x, y, state[M.FLOOR]):
         sounds.start_effect(state, rom, sounds.BUMP)
     else:
         state[M.POS_X] = x + step
@@ -227,7 +227,7 @@ def move_up_or_down(state: State, rom: bytes) -> None:
     state[STEP_Y] = step
     if y == limit:
         reach_edge(state, rom)
-    elif R.wall_at(rom, x + 7, probe_y) or R.wall_at(rom, x, probe_y):
+    elif R.wall_at(rom, x + 7, probe_y, state[M.FLOOR]) or R.wall_at(rom, x, probe_y, state[M.FLOOR]):
         sounds.start_effect(state, rom, sounds.BUMP)
     else:
         state[M.POS_Y] = y + step
@@ -446,8 +446,9 @@ def stairs_sprite(state: State, rom: bytes) -> Sprite:
     here = state[STAIRS] & NO_STAIRS
     picture = (here & 3) ^ 1 if here >= GOES_UP else here
     address = R.TABLES["STAIRS_SPRITES"][0] + picture * SPRITE_HEIGHT_STAIRS
-    line = line_of(state, R.table(rom, "STAIRS_Y")[here & 3])
-    return Sprite(R.table(rom, "STAIRS_X")[state[M.ROOM]], line, address, SPRITE_HEIGHT_STAIRS, wide=True)
+    line = line_of(state, R.table(rom, "STAIRS_Y", state[M.FLOOR])[here & 3])
+    stairs_x = R.table(rom, "STAIRS_X", state[M.FLOOR])[state[M.ROOM]]
+    return Sprite(stairs_x, line, address, SPRITE_HEIGHT_STAIRS, wide=True)
 
 
 def next_monster(state: State, rom: bytes) -> Sprite | None:
@@ -537,7 +538,7 @@ def wall_columns(state: State, rom: bytes, line: int) -> int:
     walls = 0
     for column in range(SCREEN_WIDTH):
         at_edge = column < EDGE_STRIP or column >= SCREEN_WIDTH - EDGE_STRIP
-        if (at_edge and y >> 4 == MIDDLE_ROW) or R.wall_at(rom, column, y):
+        if (at_edge and y >> 4 == MIDDLE_ROW) or R.wall_at(rom, column, y, state[M.FLOOR]):
             walls |= 1 << column
     return walls
 
@@ -766,7 +767,7 @@ def join(state: State, rom: bytes, pieces: int) -> int:
 def doorways(state: State, rom: bytes) -> None:
     """Test the six crossings in order; the first whose start or end the player is on, pushing that way,
     ends the search."""
-    lines = R.table(rom, "DOORWAY_LINES")
+    lines = R.table(rom, "DOORWAY_LINES", state[M.FLOOR])
     for crossing in range(DOORWAY_CROSSINGS):
         direction = R.byte_at(rom, DOORWAY_DIRECTIONS + DOORWAY_CROSSINGS - 1 - crossing)
         if not state[JOYSTICK] & R.byte_at(rom, DIRECTION_STICK + direction):
@@ -802,7 +803,7 @@ def enter_doorway(state: State, rom: bytes, direction: int) -> None:
 
 def door_shut(state: State, rom: bytes, direction: int) -> bool:
     """Is the way out of this room locked (or not a door at all)? ($FDA6)"""
-    neighbour = R.table(rom, "DOOR_IDS")[state[M.ROOM] * 4 + direction]
+    neighbour = R.table(rom, "DOOR_IDS", state[M.FLOOR])[state[M.ROOM] * 4 + direction]
     if neighbour & 0x80:
         return True
     return monsters.door_locked(state, rom, state[M.FLOOR], neighbour)
@@ -827,10 +828,10 @@ def leave_doorway(state: State, rom: bytes, direction: int) -> None:
 def room_bound(state: State, rom: bytes, direction: int) -> int:
     """The y limit through the door this way, or 0 for none ($FD6C). For the doors at the side the game
     reads past the end of its table, but only asks whether the answer is 0, and it never is."""
-    neighbour = R.table(rom, "DOOR_IDS")[state[M.ROOM] * 4 + direction]
+    neighbour = R.table(rom, "DOOR_IDS", state[M.FLOOR])[state[M.ROOM] * 4 + direction]
     if neighbour & 0x80:
         return 0
-    return R.byte_at(rom, R.TABLES["ROOM_BOUNDS"][0] + (neighbour >> 1))
+    return R.byte_at(rom, R.TABLES["ROOM_BOUNDS"][0] + (neighbour >> 1), state[M.FLOOR])
 
 
 def room_changed(state: State, rom: bytes) -> None:
@@ -844,8 +845,8 @@ def room_changed(state: State, rom: bytes) -> None:
 def stairs_here(state: State, rom: bytes) -> int:
     """$9B for the room: $0F for none, else the edge plus 4 if they go up ($FD4C)."""
     room = state[M.ROOM]
-    index = monsters.floor_index(state, state[M.FLOOR])
+    index = monsters.floor_index(state, rom, state[M.FLOOR])
     if not R.table(rom, "STAIRS_HERE")[index] & bit(room):
         return NO_STAIRS
-    going_up = R.byte_at(rom, R.TABLES["STAIRS_GO_UP"][0] + index) & bit(room)
-    return (GOES_UP if going_up else 0) | R.table(rom, "STAIRS_EDGE")[room]
+    going_up = R.table(rom, "STAIRS_GO_UP")[index] & bit(room)
+    return (GOES_UP if going_up else 0) | R.table(rom, "STAIRS_EDGE", state[M.FLOOR])[room]

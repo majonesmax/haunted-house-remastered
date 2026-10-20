@@ -12,6 +12,10 @@ The mansion, as the tables describe it (see docs/rom-elements.md for the evidenc
 - Stairs at the outer edge of some rooms (STAIRS_HERE, STAIRS_GO_UP, STAIRS_EDGE). Game 9 has its own
   stairs and locks (the second half of those tables). Room 2 of the
   first floor has the front door, the way out. Floors are 0-3 in RAM and shown as 1-4 on screen.
+
+A port can bring a mansion of its own in place of the ROM's: a Floors (below) - a ROM-shaped image per
+floor, each with that floor's plan, plus the locks and stairs for every floor. The rules here and in the
+model read it as they read the ROM; a read of a table that differs by floor says which floor it means.
 """
 
 import os
@@ -90,6 +94,34 @@ FLOOR_LEFT, FLOOR_RIGHT, FLOOR_BOTTOM, FLOOR_TOP = 0x04, 0x94, 0x01, 0xFB  # how
 
 
 Exit = tuple[str, int | None]   # a room's way out: ("door", its number), ("edge", None) or ("wall", None)
+# the tables a mansion of its own may give each floor; and those it gives by floor and game, all floors'
+PER_FLOOR = ("FLOOR_WALLS", "DOOR_IDS", "STAIRS_EDGE", "STAIRS_X", "STAIRS_Y", "ROOM_BOUNDS", "DOORWAY_LINES",
+             "WAYPOINT_X", "WAYPOINT_Y")
+BY_FLOOR_AND_GAME = ("LOCKED_DOORS", "STAIRS_HERE", "STAIRS_GO_UP")
+
+
+class Floors(bytes):
+    """A mansion of its own, in place of the ROM (as bytes, it's the first floor's image): `images`, one
+    ROM-shaped image per floor with that floor's plan in its PER_FLOOR tables, and `by_floor_and_game`,
+    the BY_FLOOR_AND_GAME tables for all its floors (games 1-8, then game 9's)."""
+
+    images: list[bytes]
+    by_floor_and_game: dict[str, bytes]
+
+    def __new__(cls, images: list[bytes], by_floor_and_game: dict[str, bytes]) -> "Floors":
+        made = super().__new__(cls, images[0])
+        made.images = images
+        made.by_floor_and_game = by_floor_and_game
+        return made
+
+
+def floor_count(rom: bytes) -> int:
+    return len(rom.images) if isinstance(rom, Floors) else FLOOR_COUNT
+
+
+def floor_image(rom: bytes, floor: int) -> bytes:
+    """The bytes to read for this floor: the ROM itself, or a Floors' image of that floor."""
+    return rom.images[floor] if isinstance(rom, Floors) else rom
 
 
 def load(path: str = DEFAULT_ROM) -> bytes:
@@ -100,17 +132,25 @@ def load(path: str = DEFAULT_ROM) -> bytes:
     return rom
 
 
-def table(rom: bytes, name: str) -> bytes:
+def table(rom: bytes, name: str, floor: int = 0) -> bytes:
+    """A table; for one of the PER_FLOOR tables, as it is on `floor`."""
+    if isinstance(rom, Floors) and name in BY_FLOOR_AND_GAME:
+        return rom.by_floor_and_game[name]
     address, length, _what, _sure = TABLES[name]
-    return rom[address - ROM_START: address - ROM_START + length]
+    return floor_image(rom, floor)[address - ROM_START: address - ROM_START + length]
 
 
-def byte_at(rom: bytes, address: int) -> int:
-    return rom[address - ROM_START]
+def byte_at(rom: bytes, address: int, floor: int = 0) -> int:
+    return floor_image(rom, floor)[address - ROM_START]
+
+
+def game_index(rom: bytes, floor: int, game: int) -> int:
+    """A floor's place in the BY_FLOOR_AND_GAME tables: game 9's follow the other games'."""
+    return floor + floor_count(rom) if game == GAME_9 else floor
 
 
 # --- walls -------------------------------------------------------------------------------------------
-def wall_at(rom: bytes, x: int, y: int) -> bool:
+def wall_at(rom: bytes, x: int, y: int, floor: int = 0) -> bool:
     """Is the point (x, y) inside a wall? The game's own test (its routine at $F2A1), for one point.
 
     Columns are 16 units wide and start at x=16 (column 0); rows are 16 units tall. Outside columns 0-7
@@ -120,10 +160,10 @@ def wall_at(rom: bytes, x: int, y: int) -> bool:
     row = (y & 0xFF) >> 4
     if column & 0x08:
         return row != 8
-    return table(rom, "FLOOR_WALLS")[row] & table(rom, "COLUMN_BITS")[column] != 0
+    return table(rom, "FLOOR_WALLS", floor)[row] & table(rom, "COLUMN_BITS")[column] != 0
 
 
-def can_step(rom: bytes, x: int, y: int, direction: str) -> bool:
+def can_step(rom: bytes, x: int, y: int, direction: str, floor: int = 0) -> bool:
     """Could the player at (x, y) take one step in direction? The same points the game tests ($F1BF).
     The player's body is 8 wide and 3 tall: x..x+7, y..y+2. At the floor's limits the game stops you
     (stepping off there is the stairs or the front door, handled elsewhere)."""
@@ -133,18 +173,18 @@ def can_step(rom: bytes, x: int, y: int, direction: str) -> bool:
         return False
     probes = {"right": ((x + 8, y + 2), (x + 8, y)), "left": ((x - 1, y + 2), (x - 1, y)),
               "up": ((x + 7, y + 3), (x, y + 3)), "down": ((x + 7, y - 1), (x, y - 1))}
-    return not any(wall_at(rom, probe_x, probe_y) for probe_x, probe_y in probes[direction])
+    return not any(wall_at(rom, probe_x, probe_y, floor) for probe_x, probe_y in probes[direction])
 
 
 # --- rooms, doors and stairs -------------------------------------------------------------------------
-def room_centre(rom: bytes, room: int) -> Point:
-    return table(rom, "WAYPOINT_X")[room], table(rom, "WAYPOINT_Y")[room]
+def room_centre(rom: bytes, room: int, floor: int = 0) -> Point:
+    return table(rom, "WAYPOINT_X", floor)[room], table(rom, "WAYPOINT_Y", floor)[room]
 
 
-def room_exits(rom: bytes, room: int) -> dict[str, Exit]:
+def room_exits(rom: bytes, room: int, floor: int = 0) -> dict[str, Exit]:
     """{direction: ("door", number) | ("edge", None) | ("wall", None)} for one room."""
     exits: dict[str, Exit] = {}
-    entries = table(rom, "DOOR_IDS")[room * 4: room * 4 + 4]
+    entries = table(rom, "DOOR_IDS", floor)[room * 4: room * 4 + 4]
     for direction, value in zip(DIRECTIONS, entries):
         if value == 0xFF:
             exits[direction] = ("wall", None)
@@ -155,11 +195,11 @@ def room_exits(rom: bytes, room: int) -> dict[str, Exit]:
     return exits
 
 
-def doors(rom: bytes) -> dict[int, tuple[int, ...]]:
+def doors(rom: bytes, floor: int = 0) -> dict[int, tuple[int, ...]]:
     """{door number: (room, room)}: which two rooms each door joins."""
     joins: dict[int, set[int]] = {}
     for room in range(ROOM_COUNT):
-        for _direction, (kind, number) in room_exits(rom, room).items():
+        for _direction, (kind, number) in room_exits(rom, room, floor).items():
             if kind == "door" and number is not None:
                 joins.setdefault(number, set()).add(room)
     return {number: tuple(sorted(rooms)) for number, rooms in sorted(joins.items())}
@@ -169,24 +209,23 @@ def locked_doors(rom: bytes, floor: int, game: int) -> list[int]:
     """Door numbers locked on this floor in this game (game 0-8). Games 1 and 2 (0, 1) have no locks."""
     if game < 2:
         return []
-    index = floor + 4 if game == GAME_9 else floor
-    mask = table(rom, "LOCKED_DOORS")[index]
+    mask = table(rom, "LOCKED_DOORS")[game_index(rom, floor, game)]
     return [number for number in range(DOOR_COUNT) if mask & 1 << number]
 
 
 def stairs(rom: bytes, floor: int, game: int) -> dict[int, dict]:
     """{room: dict(goes="up"|"down", edge=..., x=..., y=...)} for the rooms of a floor that have stairs.
     Room 2 of the first floor is the front door, not stairs."""
-    index = floor + 4 if game == GAME_9 else floor
-    here = byte_at(rom, TABLES["STAIRS_HERE"][0] + index)
-    going_up = byte_at(rom, TABLES["STAIRS_GO_UP"][0] + index)
+    index = game_index(rom, floor, game)
+    here = table(rom, "STAIRS_HERE")[index]
+    going_up = table(rom, "STAIRS_GO_UP")[index]
     found: dict[int, dict] = {}
     for room in range(ROOM_COUNT):
         if not here & 1 << room:
             continue
-        edge = table(rom, "STAIRS_EDGE")[room]
+        edge = table(rom, "STAIRS_EDGE", floor)[room]
         found[room] = {"goes": "up" if going_up & 1 << room else "down", "edge": EDGES[edge],
-                       "x": table(rom, "STAIRS_X")[room], "y": table(rom, "STAIRS_Y")[edge]}
+                       "x": table(rom, "STAIRS_X", floor)[room], "y": table(rom, "STAIRS_Y", floor)[edge]}
     return found
 
 

@@ -29,7 +29,7 @@ def hint(state: GameState, rom: bytes) -> list[str]:
     aim = nearest_urn(state)
     if aim is None:
         return ["NOTHING LEFT TO FIND."]
-    floor, room = aim.floor, room_at(rom, aim.x, aim.y)
+    floor, room = aim.floor, room_at(rom, aim.x, aim.y, aim.floor)
     if floor == state.floor and room == state.room:
         return take_it(state, aim)
     return [left_to_find(state), way(state, floor, room)]
@@ -86,10 +86,10 @@ def way(state: GameState, floor: int, room: int) -> str:
     return across(state.room, room)
 
 
-def room_at(rom: bytes, x: int, y: int) -> int:
+def room_at(rom: bytes, x: int, y: int, floor: int = 0) -> int:
     """The room (0-5) whose middle is nearest a place on the floor."""
     def distance(room: int) -> int:
-        centre_x, centre_y = R.room_centre(rom, room)
+        centre_x, centre_y = R.room_centre(rom, room, floor)
         return (centre_x - x) ** 2 + (centre_y - y) ** 2
     return min(range(R.ROOM_COUNT), key=distance)
 

@@ -86,7 +86,7 @@ class GameState:
         self.lights_on: bool = False
         self.mode: str = MODES.get(self.byte(M.GAME_STATE), "playing")
         self.game: int = min(self.byte(M.GAME_NUMBER), 8) + 1
-        self.floor: int = self.byte(M.FLOOR) & 3
+        self.floor: int = self.byte(M.FLOOR) % R.floor_count(rom)
         self.room: int = self.byte(M.ROOM) % R.ROOM_COUNT
         beyond = self.byte(0x97)
         self.room_beyond: int | None = beyond if beyond < R.ROOM_COUNT else None
@@ -141,8 +141,8 @@ class GameState:
         if stairs_byte == NO_STAIRS:
             return None
         edge = stairs_byte & 3
-        x = R.table(rom, "STAIRS_X")[self.room]
-        y = R.table(rom, "STAIRS_Y")[edge]
+        x = R.table(rom, "STAIRS_X", self.floor)[self.room]
+        y = R.table(rom, "STAIRS_Y", self.floor)[edge]
         return Stairs(R.EDGES[edge], bool(stairs_byte & 4), x, y)
 
     @property
