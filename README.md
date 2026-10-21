@@ -9,6 +9,12 @@ three pieces, the urn out of the front door, and a lot of dying - switching look
 choose your ROM once and press Play. The same emulator, the same looks and the same sound, run in the page
 ([how](https://github.com/majonesmax/haunted-house-remastered-web)).
 
+No ROM? The same game also exists as a native **[NES game](https://majonesmax.github.io/haunted-house-nes/)** and
+a native **[SNES game](https://majonesmax.github.io/haunted-house-snes/)**, playable in the browser with nothing
+to bring. They don't run Atari's code: they were written from this project's
+[specification](docs/spec.md) of the game, rule for rule, and are checked frame by frame against it, so
+nothing of the original is in them. They play in their own, bigger mansion.
+
 Atari 2600 **Haunted House** (James Andreasen, 1982) running *unmodified* in an emulator, with every frame
 redrawn live from the game's 128 bytes of RAM. It's the sister project of
 [Adventure Forever](https://github.com/majonesmax/adventure-forever), and works the same way.
