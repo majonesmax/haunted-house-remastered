@@ -5,14 +5,19 @@
 ▶️ **[Watch a full playthrough on YouTube](https://youtu.be/VENjmHKR9GY)** (3:41): game 1 start to finish - all
 three pieces, the urn out of the front door, and a lot of dying - switching looks and views along the way.
 
+🕹️ **[Play it in your browser](https://majonesmax.github.io/haunted-house-remastered-web/)**: nothing to install -
+choose your ROM once and press Play. The same emulator, the same looks and the same sound, run in the page
+([how](https://github.com/majonesmax/haunted-house-remastered-web)).
+
 Atari 2600 **Haunted House** (James Andreasen, 1982) running *unmodified* in an emulator, with every frame
 redrawn live from the game's 128 bytes of RAM. It's the sister project of
 [Adventure Forever](https://github.com/majonesmax/adventure-forever), and works the same way.
 
 ## Download
 
-**[Get the latest release](https://github.com/majonesmax/haunted-house-remastered/releases/latest)**: one zip
-for Windows (64-bit) and one for macOS (Apple silicon: M1 and later). Unzip it and open the app inside. On an
+**[Play it in your browser](https://majonesmax.github.io/haunted-house-remastered-web/)** with nothing to
+install, or **[get the latest release](https://github.com/majonesmax/haunted-house-remastered/releases/latest)**:
+one zip for Windows (64-bit) and one for macOS (Apple silicon: M1 and later). Unzip it and open the app inside. On an
 Intel Mac or on Linux, [run it from the source](#running-it-from-the-source) instead.
 
 You need your own copy of the game (the ROM isn't included). The first time, the game asks you to drag the ROM
