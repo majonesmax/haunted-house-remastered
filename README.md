@@ -1,5 +1,9 @@
 # Haunted House, remastered
 
+Atari 2600 **Haunted House** (James Andreasen, 1982) running *unmodified* in an emulator, with every frame
+redrawn live from the game's 128 bytes of RAM. It's the sister project of
+[Adventure Forever](https://github.com/majonesmax/adventure-forever), and works the same way.
+
 ![The same moment in the two looks: the NES remaster and the SNES remaster](docs/media/looks.png)
 
 ▶️ **[Watch a full playthrough on YouTube](https://youtu.be/VENjmHKR9GY)** (3:41): game 1 start to finish - all
@@ -14,10 +18,6 @@ a native **[SNES game](https://majonesmax.github.io/haunted-house-snes/)**, play
 to bring. They don't run Atari's code: they were written from this project's
 [specification](docs/spec.md) of the game, rule for rule, and are checked frame by frame against it, so
 nothing of the original is in them. They play in their own, bigger mansion.
-
-Atari 2600 **Haunted House** (James Andreasen, 1982) running *unmodified* in an emulator, with every frame
-redrawn live from the game's 128 bytes of RAM. It's the sister project of
-[Adventure Forever](https://github.com/majonesmax/adventure-forever), and works the same way.
 
 ## Download
 
