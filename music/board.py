@@ -26,11 +26,12 @@ EFFECT_SETS = {"chiptune": effects, "orchestra": orchestral_effects}   # a sound
 
 
 class SoundBoard:
-    def __init__(self, music: MusicPlayer):
+    def __init__(self, music: MusicPlayer, background: bool = True):
+        """background: the ambience is made in a thread (the app); False makes it now (the browser build)."""
         self.music = music
         self.sound_sets = {chip: maker.render_all() for chip, maker in EFFECT_SETS.items()}
         self.watcher = EventWatcher()
-        self.ambience = Ambience()
+        self.ambience = Ambience(background)
         self.remastered = True
         self.holding = True     # silent while the app loads (app/window.py); nothing is mixed
         self.voices: list[list] = []   # [samples, position] of each effect playing

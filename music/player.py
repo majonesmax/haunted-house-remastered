@@ -74,7 +74,9 @@ class MusicPlayer:
     The songs are rendered in the background, the title and first floor first, so making a player costs
     nothing; a piece that isn't ready yet starts as soon as it is."""
 
-    def __init__(self, songs: dict[str, Song], synth: str = "chiptune"):
+    def __init__(self, songs: dict[str, Song], synth: str = "chiptune", background: bool = True):
+        """background: render the songs in a thread (the app); False renders them now (the browser build,
+        which has no threads and shows a loading screen meanwhile)."""
         self.songs = songs
         self.synth = SYNTHS[synth]
         self.synth_name = synth
@@ -87,7 +89,10 @@ class MusicPlayer:
         self.on = True
         self.paused = False      # the window's pause: the music waits too
         self.waiting = False     # the piece wanted isn't rendered yet
-        threading.Thread(target=self.render_all, daemon=True).start()
+        if background:
+            threading.Thread(target=self.render_all, daemon=True).start()
+        else:
+            self.render_all()
 
     def render_all(self) -> None:
         """In the background: every song, those heard first first."""

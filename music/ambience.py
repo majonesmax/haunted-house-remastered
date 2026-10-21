@@ -108,7 +108,8 @@ def place_for(state: GameState, intro: bool) -> str:
 class Ambience:
     """The beds and one-offs, made in the background; each bed keeps its place in its loop."""
 
-    def __init__(self) -> None:
+    def __init__(self, background: bool = True) -> None:
+        """background: make the sounds in a thread (the app); False makes them now (the browser build)."""
         self.beds: dict[str, Samples] = {}           # place -> its bed, once made
         self.positions: dict[str, int] = {}          # place -> where its bed is up to
         self.thunders: list[Samples] = []
@@ -124,7 +125,10 @@ class Ambience:
         self.rng = np.random.default_rng()
         self.until_noise = self.rng.integers(*NOISE_GAP)
         self.lock = threading.Lock()
-        threading.Thread(target=self.make_all, daemon=True).start()
+        if background:
+            threading.Thread(target=self.make_all, daemon=True).start()
+        else:
+            self.make_all()
 
     def make_all(self) -> None:
         """A second or two of work, done once in the background."""
